@@ -1,0 +1,17 @@
+{
+  "name": "hated",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HateD - one-shot stable-match dating. Monorepo root.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "sim": "npm run sim -w @hated/core --"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
