@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "HateD",
+    "slug": "hated",
+    "scheme": "hated",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FBF3EE",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.hated.mobile"
+    },
+    "android": {
+      "package": "app.hated.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF3EE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store"
+    ]
+  }
+}
