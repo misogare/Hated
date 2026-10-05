@@ -15,7 +15,7 @@
     "android": {
       "package": "app.hated.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#FBF3EE",
+        "backgroundColor": "#2B1620",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -28,7 +28,16 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF3EE"
+        }
+      ]
     ]
   }
 }
