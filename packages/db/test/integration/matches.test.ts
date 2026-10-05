@@ -108,3 +108,42 @@ describe.skipIf(!hasTestDatabase)('match history, unread and reports (Postgres)'
     expect(await prisma.report.count()).toBe(0);
   });
 });
+
+describe.skipIf(!hasTestDatabase)('reviewing reports (Postgres)', () => {
+  let prisma: PrismaClient;
+
+  beforeEach(async () => {
+    prisma ??= createTestClient();
+    await resetDatabase(prisma);
+    await seedDatabase(prisma);
+  });
+
+  afterAll(async () => {
+    await prisma?.$disconnect();
+  });
+
+  it('lists open reports with who and why, counts repeat reports, and resolves them', async () => {
+    const { listReports, resolveReport } = await import('../../src/reports.js');
+    const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+    const zara = await member(prisma, 'zara@vu.edu.au', 'Zara', 'woman', []);
+    const max = await member(prisma, 'max@vu.edu.au', 'Max', 'man', []);
+    for (const [reporter, at] of [[sam, '2026-09-27T09:00:00Z'], [zara, '2026-10-04T09:00:00Z']] as const) {
+      const round = await prisma.matchRound.create({
+        data: { status: 'PUBLISHED', objective: 'min-regret', config: {}, population: 2, matched: 2, matchRate: 1, stable: true, startedAt: new Date(at) },
+      });
+      const match = await prisma.match.create({ data: { roundId: round.id, profileAId: reporter.profileId, profileBId: max.profileId } });
+      await reportMatch(prisma, reporter.userId, match.id, { reason: 'harassment', details: `from ${reporter.userId === sam.userId ? 'Sam' : 'Zara'}` });
+    }
+
+    const open = await listReports(prisma);
+    expect(open.map((report) => [report.reporter.name, report.reported.name, report.reportsAboutThem])).toEqual([
+      ['Sam', 'Max', 2],
+      ['Zara', 'Max', 2],
+    ]);
+
+    expect(await resolveReport(prisma, open[0]!.id)).toBe(true);
+    expect((await listReports(prisma)).map((report) => report.reporter.name)).toEqual(['Zara']);
+    expect(await listReports(prisma, { includeResolved: true })).toHaveLength(2);
+    expect(await resolveReport(prisma, 'no-such-report')).toBe(false);
+  });
+});
