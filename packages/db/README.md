@@ -34,7 +34,7 @@ only the storage shape.
 
 Other scripts: `generate` (regenerate the client), `push` (schema → DB without a
 migration), `studio`, `migrate:deploy`, `round` (run one match round — see
-below), `typecheck`.
+below), `round:inspect` (read one back), `typecheck`.
 
 ### Seed data
 
@@ -184,6 +184,25 @@ It reads `DATABASE_URL` from `packages/db/.env`; run `npm run seed` first if the
 institution/questionnaire tables are empty. The population itself must exist as
 `Profile` rows. A dry run is useful for previewing what a scoring change does
 before it is written as a round.
+
+## Inspecting a persisted round
+
+`npm run round:inspect <roundId>` reads a round back by id: the header and stored
+metrics, every participant with their side and outcome (and, for the unmatched,
+the coarse reason), and every pair with each side's rank and directional score.
+It is the read-side companion to the round runner.
+
+```bash
+# from the repo root (round id printed by `npm run round`)
+npm run round:inspect -- cmup7rdbl0000t8j5kp3u9glk
+
+# machine-readable, or several rounds at once
+npm run round:inspect -- <id1> <id2> --json
+```
+
+A missing id prints an error and exits non-zero. The underlying loader,
+`getRoundReport(prisma, roundId)`, is exported too (returns `null` for an
+unknown id), so an API route can reuse it instead of the CLI.
 
 ## Using the client
 

@@ -32,6 +32,14 @@ export {
   type PersistedMatchRound,
 } from './rounds.js';
 
+export {
+  getRoundReport,
+  type RoundReport,
+  type RoundReportMatch,
+  type RoundReportParticipant,
+  type StoredMetrics,
+} from './round-info.js';
+
 export interface CreatePrismaClientOptions {
   /** Overrides `process.env.DATABASE_URL`. */
   connectionString?: string;
