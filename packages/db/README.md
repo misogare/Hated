@@ -36,7 +36,7 @@ Other scripts: `generate` (regenerate the client), `push` (schema → DB without
 migration), `studio`, `migrate:deploy`, `round` (run one match round — see
 below), `round:inspect` (read one back), `compare` (fairness objectives
 side by side), `send-code` (email a verification code), `verify-code`
-(redeem one), `typecheck`.
+(redeem one), `mail:check` (test the email transport), `typecheck`.
 
 ### Seed data
 
@@ -319,6 +319,30 @@ Environment variables (see `.env.example`):
 Delivering to anyone other than the Resend account's own address requires a
 verified sending domain. See [`docs/email-sender-domain.md`](../../docs/email-sender-domain.md)
 for the provider comparison, the exact DNS records, and the free-subdomain route.
+
+### The `mail:check` helper CLI
+
+Tests the email transport on its own: no database, no user rows. It prints the
+transport it resolved (never the password or key); for SMTP it then connects,
+upgrades to TLS and logs in without sending anything. With `--to` it also sends a
+sample verification email (code `123456`, subject prefixed `[mail:check]`), so you
+can see whether it lands in the inbox or in spam.
+
+```bash
+npm run mail:check                          # which transport, and can it log in?
+npm run mail:check -- --to you@example.com  # ...and send a sample
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--to <addr>` | also send a sample verification email here |
+| `--transport <kind>` | `smtp`, `resend`, or `console`; default `MAIL_TRANSPORT`, else auto-detect |
+| `--from <addr>` / `--app <name>` | sender override / product name in the copy |
+
+A failed step exits non-zero with the server's reply and, where it can tell, a
+next step: a refused login points at the SMTP key (and, on Brevo, the authorized
+IP list); a refused connection suggests port 2525 or 465; a rejected envelope
+points at `MAIL_FROM`.
 
 ### The `send-code` helper CLI
 

@@ -17,7 +17,8 @@
     "round:inspect": "npm run round:inspect -w @hated/db --",
     "compare": "npm run compare -w @hated/db --",
     "send-code": "npm run send-code -w @hated/db --",
-    "verify-code": "npm run verify-code -w @hated/db --"
+    "verify-code": "npm run verify-code -w @hated/db --",
+    "mail:check": "npm run mail:check -w @hated/db --"
   },
   "engines": {
     "node": ">=20"

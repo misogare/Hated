@@ -30,6 +30,7 @@
     "compare": "tsx src/compare.ts",
     "send-code": "tsx src/send-code.ts",
     "verify-code": "tsx src/verify-code.ts",
+    "mail:check": "tsx src/mail-check.ts",
     "studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest"
