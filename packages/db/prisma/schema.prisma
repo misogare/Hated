@@ -1,0 +1,363 @@
+// HateD persistence schema.
+//
+// Four domains live here:
+//   1. Identity + the matching profile  (User, Profile and its trait/desire graph)
+//   2. The FirstDate questionnaire      (Questionnaire, Question, Response, Answer)
+//   3. A match round and its pairs      (MatchRound, MatchRoundParticipant, Match)
+//   4. Institution verification         (Institution allowlist, InstitutionVerification)
+//
+// Design note: the matching engine in `@hated/core` treats a gender as an opaque
+// string, so genders are stored as plain strings here rather than an enum. That
+// keeps the two-gender assumption out of the database and lets the taxonomy change
+// without a migration.
+//
+// Prisma ORM v7: the datasource URL is configured in `prisma.config.ts`, not here.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Which trusted-institution allowlist an address belongs to.
+enum VerificationType {
+  EDU
+  GOV
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  REVOKED
+}
+
+enum QuestionKind {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SCALE
+  BOOLEAN
+  TEXT
+}
+
+/// Which side of the proposer/receiver partition a participant landed on.
+enum Side {
+  A
+  B
+}
+
+enum MatchRoundStatus {
+  DRAFT
+  COMPUTED
+  PUBLISHED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Identity + matching profile
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       Profile?
+  verifications InstitutionVerification[]
+
+  @@map("users")
+}
+
+/// The matching-relevant half of an account. Mirrors `Profile` in @hated/core:
+/// gender + seeking feed the partition, traits/desires feed FirstDate scoring,
+/// and the weights are the per-person ranking weights (null = round defaults).
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String
+  birthDate   DateTime
+  genderId    String
+  isActive    Boolean  @default(true)
+
+  // Per-person ranking weights. Null falls back to the round's FirstDateConfig.
+  similarityWeight  Float?
+  desireWeight      Float?
+  reciprocityWeight Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seeking      ProfileSeeking[]
+  traits       ProfileTrait[]
+  desires      ProfileDesire[]
+  blocksMade   ProfileBlock[]            @relation("blocker")
+  blocksTargetingMe ProfileBlock[]       @relation("blocked")
+  responses    QuestionnaireResponse[]
+  roundEntries MatchRoundParticipant[]
+  matchesAsA   Match[]                   @relation("MatchSideA")
+  matchesAsB   Match[]                   @relation("MatchSideB")
+
+  @@index([genderId])
+  @@index([isActive])
+  @@map("profiles")
+}
+
+/// Genders a profile accepts. No rows means "open to everyone", matching the
+/// engine's empty-`seeking` semantics.
+model ProfileSeeking {
+  profileId String
+  genderId  String
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, genderId])
+  @@map("profile_seeking")
+}
+
+/// A profile's own trait values, normalised to [0,1] by the writer.
+model ProfileTrait {
+  id        String @id @default(cuid())
+  profileId String
+  key       String
+  value     Float
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, key])
+  @@map("profile_traits")
+}
+
+/// What a profile wants in a partner. Mirrors `TargetedTrait {target, weight}`.
+/// Traits with no row here are ignored, matching the engine.
+model ProfileDesire {
+  id        String @id @default(cuid())
+  profileId String
+  key       String
+  target    Float
+  weight    Float
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, key])
+  @@map("profile_desires")
+}
+
+/// Hard exclusion between two profiles. The engine treats blocks as symmetric.
+model ProfileBlock {
+  blockerId String
+  blockedId String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  blocker Profile @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked Profile @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("profile_blocks")
+}
+
+// ---------------------------------------------------------------------------
+// FirstDate questionnaire
+// ---------------------------------------------------------------------------
+
+/// A versioned questionnaire template. Answers are turned into ProfileTrait /
+/// ProfileDesire rows by the scoring step.
+model Questionnaire {
+  id          String   @id @default(cuid())
+  key         String
+  version     Int
+  title       String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions Question[]
+  responses QuestionnaireResponse[]
+
+  @@unique([key, version])
+  @@map("questionnaires")
+}
+
+model Question {
+  id              String       @id @default(cuid())
+  questionnaireId String
+  key             String
+  prompt          String
+  kind            QuestionKind
+  position        Int
+  /// Optional trait key this question feeds into, if it is a scored question.
+  traitKey        String?
+  /// Choice labels / scale bounds, when the kind needs them.
+  options         Json?
+  createdAt       DateTime     @default(now())
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  answers       Answer[]
+
+  @@unique([questionnaireId, key])
+  @@index([questionnaireId, position])
+  @@map("questions")
+}
+
+model QuestionnaireResponse {
+  id              String    @id @default(cuid())
+  profileId       String
+  questionnaireId String
+  submittedAt     DateTime  @default(now())
+  /// Set once the answers have been materialised into traits/desires.
+  derivedAt       DateTime?
+
+  profile       Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id])
+  answers       Answer[]
+
+  @@unique([profileId, questionnaireId])
+  @@map("questionnaire_responses")
+}
+
+model Answer {
+  id          String  @id @default(cuid())
+  responseId  String
+  questionId  String
+  valueNumber Float?
+  valueText   String?
+  valueJson   Json?
+  createdAt   DateTime @default(now())
+
+  response QuestionnaireResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question Question              @relation(fields: [questionId], references: [id])
+
+  @@unique([responseId, questionId])
+  @@map("answers")
+}
+
+// ---------------------------------------------------------------------------
+// Match round
+// ---------------------------------------------------------------------------
+
+/// One execution of the engine over a population: Gale-Shapley plus the
+/// rotation-lattice objective search. `metrics` stores the RoundMetrics summary.
+model MatchRound {
+  id          String           @id @default(cuid())
+  status      MatchRoundStatus @default(DRAFT)
+  /// The fairness objective the matching was optimised for, e.g. "egalitarian".
+  objective   String
+  /// FirstDateConfig + partition options the round ran with.
+  config      Json
+  seed        Int?
+  population  Int
+  matched     Int
+  matchRate   Float
+  stable      Boolean
+  metrics     Json?
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+
+  participants MatchRoundParticipant[]
+  matches      Match[]
+
+  @@index([status])
+  @@map("match_rounds")
+}
+
+/// Every profile that entered a round, matched or not. Keeps the unmatched set
+/// ("one match or none") queryable instead of implied.
+model MatchRoundParticipant {
+  id              String  @id @default(cuid())
+  roundId         String
+  profileId       String
+  side            Side
+  matched         Boolean @default(false)
+  unmatchedReason String?
+
+  round   MatchRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  profile Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, profileId])
+  @@index([roundId, matched])
+  @@map("match_round_participants")
+}
+
+/// A single stable pair. The two unique constraints enforce the product promise:
+/// each profile appears at most once per round.
+model Match {
+  id         String   @id @default(cuid())
+  roundId    String
+  profileAId String
+  profileBId String
+  /// scoreTowards(A -> B) and scoreTowards(B -> A), when recorded.
+  scoreAB    Float?
+  scoreBA    Float?
+  /// Each side's rank of the other within their preference list (1 = first).
+  rankA      Int?
+  rankB      Int?
+  createdAt  DateTime @default(now())
+
+  round    MatchRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  profileA Profile    @relation("MatchSideA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileB Profile    @relation("MatchSideB", fields: [profileBId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, profileAId])
+  @@unique([roundId, profileBId])
+  @@unique([roundId, profileAId, profileBId])
+  @@map("matches")
+}
+
+// ---------------------------------------------------------------------------
+// Institution verification (.edu / .gov)
+// ---------------------------------------------------------------------------
+
+/// The domain allowlist. Only addresses on an active institution may verify.
+model Institution {
+  id        String           @id @default(cuid())
+  domain    String           @unique
+  name      String
+  type      VerificationType
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+
+  verifications InstitutionVerification[]
+
+  @@map("institutions")
+}
+
+/// A one-time-code verification attempt. The code is never stored in the clear:
+/// only its hash (and optional per-row salt) is persisted, along with expiry and
+/// attempt count. This is an identity-assurance gate (anti-catfish / anti-bot),
+/// not an affinity signal.
+model InstitutionVerification {
+  id         String             @id @default(cuid())
+  userId     String
+  email      String
+  domain     String
+  type       VerificationType
+  status     VerificationStatus @default(PENDING)
+  codeHash   String
+  codeSalt   String?
+  attempts   Int                @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  verifiedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution Institution? @relation(fields: [institutionId], references: [id])
+  institutionId String?
+
+  @@index([email, status])
+  @@index([expiresAt])
+  @@map("institution_verifications")
+}

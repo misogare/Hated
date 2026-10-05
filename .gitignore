@@ -6,3 +6,6 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Prisma Client is generated from prisma/schema.prisma, never committed.
+**/src/generated/

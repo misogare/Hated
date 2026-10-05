@@ -10,7 +10,9 @@
     "build": "tsc -b",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "tsc -b --emitDeclarationOnly",
-    "sim": "npm run sim -w @hated/core --"
+    "sim": "npm run sim -w @hated/core --",
+    "db:generate": "npm run generate -w @hated/db",
+    "db:migrate": "npm run migrate -w @hated/db --"
   },
   "engines": {
     "node": ">=20"
