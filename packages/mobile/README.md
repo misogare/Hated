@@ -58,6 +58,19 @@ show there, on its tile on home, and on the "Open chat" button.
 middle of the scale, as in the prototype. "Don't mind" leaves a trait out of
 matching entirely.
 
+## Privacy
+
+Settings holds the person's privacy choices:
+
+- **Notifications:** turn new messages, hellos or round results off, for every
+  device at once (on top of the phone's own settings).
+- **Take part in rounds:** off leaves them out of matching until they turn it
+  back on; matches and conversations stay. It's the same switch as home's "Sit
+  this round out".
+- **Delete my account:** after a second step that says what goes, the API
+  erases the account and everything in it, and the welcome screen confirms it.
+  Reports they made about someone else stay, without their name.
+
 ## Push notifications
 
 Home asks for permission once (the system shows its prompt) and registers this
