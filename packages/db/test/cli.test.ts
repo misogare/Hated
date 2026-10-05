@@ -10,9 +10,11 @@ describe('parseArgs', () => {
       status: 'COMPUTED',
       includeInactive: false,
       persist: true,
+      notify: false,
       json: false,
       help: false,
     });
+    expect(parseArgs(['--notify']).notify).toBe(true);
   });
 
   it('reads seed, objective, status, and FirstDate overrides', () => {

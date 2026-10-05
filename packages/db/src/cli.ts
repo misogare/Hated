@@ -23,6 +23,7 @@
  *   --ids <a,b,c>         restrict to these profile ids
  *   --include-inactive    include profiles with isActive = false
  *   --dry-run             run the round but do not write anything
+ *   --notify              push "your result is in" to everyone in a PUBLISHED round
  *   --json                print the summary as JSON instead of a report
  */
 
@@ -35,7 +36,9 @@ import { runMatchRound, type FairObjective, type MatchRoundOptions } from '@hate
 
 import type { MatchRoundStatus } from './generated/prisma/enums.js';
 import { createPrismaClient } from './index.js';
+import { createNotifier } from './notify.js';
 import { loadEngineProfiles } from './population.js';
+import { createExpoPushSender } from './push-sender.js';
 import { persistMatchRound } from './rounds.js';
 
 const OBJECTIVES: FairObjective[] = [
@@ -57,6 +60,7 @@ interface CliArgs {
   ids?: string[];
   includeInactive: boolean;
   persist: boolean;
+  notify: boolean;
   json: boolean;
   help: boolean;
 }
@@ -68,6 +72,7 @@ function parseArgs(argv: readonly string[]): CliArgs {
     status: 'COMPUTED',
     includeInactive: false,
     persist: true,
+    notify: false,
     json: false,
     help: false,
   };
@@ -115,6 +120,9 @@ function parseArgs(argv: readonly string[]): CliArgs {
       case '--dry-run':
       case '--no-persist':
         args.persist = false;
+        break;
+      case '--notify':
+        args.notify = true;
         break;
       case '--json':
         args.json = true;
@@ -182,6 +190,7 @@ function printHelp(): void {
     --ids <a,b,c>         restrict to these profile ids
     --include-inactive    include profiles with isActive = false
     --dry-run             run the round but do not write anything
+    --notify              push "your result is in" to everyone in a PUBLISHED round
     --json                print the summary as JSON
 `);
 }
@@ -217,6 +226,14 @@ async function main(): Promise<void> {
           population,
         })
       : null;
+
+    // People only see PUBLISHED rounds, so only those are worth a notification.
+    if (args.notify && persisted !== null && args.status === 'PUBLISHED') {
+      const sender = createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined });
+      await createNotifier(prisma, sender).roundPublished(persisted.roundId);
+    } else if (args.notify) {
+      console.error('--notify only applies to a round persisted with --status PUBLISHED; nothing was sent.');
+    }
 
     if (args.json) {
       console.log(

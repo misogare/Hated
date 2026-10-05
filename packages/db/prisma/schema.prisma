@@ -74,8 +74,26 @@ model User {
   profile       Profile?
   verifications InstitutionVerification[]
   sessions      Session[]
+  pushTokens    PushToken[]
 
   @@map("users")
+}
+
+/// A device that can receive push notifications, by its Expo push token.
+/// The token is unique: a phone that signs in to another account moves to it.
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  /// "ios" or "android".
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 /// A signed-in device. The app holds a random token; only its SHA-256 hash is

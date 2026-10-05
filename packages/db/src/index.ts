@@ -98,6 +98,26 @@ export {
 } from './results.js';
 
 export {
+  pushTokensFor,
+  registerPushToken,
+  removePushTokens,
+  unregisterAllPushTokens,
+  unregisterPushToken,
+  type PushPlatform,
+  type RegisterPushTokenResult,
+} from './push-tokens.js';
+
+export {
+  createExpoPushSender,
+  type ExpoPushSenderOptions,
+  type PushMessage,
+  type PushSender,
+  type PushTicket,
+} from './push-sender.js';
+
+export { createNotifier, silentNotifier, type Notifier } from './notify.js';
+
+export {
   REPORT_REASONS,
   listMatches,
   reportMatch,

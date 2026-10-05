@@ -67,10 +67,10 @@ describe.skipIf(!hasTestDatabase)('round results (Postgres)', () => {
     const maya = await member(prisma, 'maya@vu.edu.au', 'Maya', 'woman', []);
     const match = await roundMatching(prisma, sam.profileId, maya.profileId);
 
-    expect(await sayHello(prisma, maya.userId, match.id)).toEqual({ ok: true, mutual: false });
+    expect(await sayHello(prisma, maya.userId, match.id)).toEqual({ ok: true, mutual: false, becameMutual: false });
     expect(await getLatestResult(prisma, sam.userId)).toMatchObject({ match: { saidHello: false, mutual: false } });
 
-    expect(await sayHello(prisma, sam.userId, match.id)).toEqual({ ok: true, mutual: true });
+    expect(await sayHello(prisma, sam.userId, match.id)).toEqual({ ok: true, mutual: true, becameMutual: true });
     expect(await getLatestResult(prisma, maya.userId)).toMatchObject({ match: { saidHello: true, mutual: true } });
   });
 

@@ -39,7 +39,12 @@ export type RoundResultView =
   | { status: 'unmatched'; roundId: string; publishedAt: string; reason: string | null };
 
 export type MatchActionResult =
-  | { ok: true; mutual: boolean }
+  | {
+      ok: true;
+      mutual: boolean;
+      /** This call's hello is the one that made it mutual (for notifying once). */
+      becameMutual?: boolean;
+    }
   | { ok: false; reason: 'not-found' | 'passed' };
 
 /** A trait's value or a desire, as the explanation needs them. */
@@ -212,13 +217,12 @@ export async function sayHello(
 
   const now = options.now ?? new Date();
   // Only the first hello counts: the null guard keeps the original time.
-  if (found.isA) {
-    await prisma.match.updateMany({ where: { id: matchId, helloAAt: null }, data: { helloAAt: now } });
-  } else {
-    await prisma.match.updateMany({ where: { id: matchId, helloBAt: null }, data: { helloBAt: now } });
-  }
+  const { count } = found.isA
+    ? await prisma.match.updateMany({ where: { id: matchId, helloAAt: null }, data: { helloAAt: now } })
+    : await prisma.match.updateMany({ where: { id: matchId, helloBAt: null }, data: { helloBAt: now } });
   const updated = await prisma.match.findUniqueOrThrow({ where: { id: matchId }, select: { helloAAt: true, helloBAt: true } });
-  return { ok: true, mutual: updated.helloAAt !== null && updated.helloBAt !== null };
+  const mutual = updated.helloAAt !== null && updated.helloBAt !== null;
+  return { ok: true, mutual, becameMutual: count > 0 && mutual };
 }
 
 /** Pass on a match: block the pair so they are never matched again. Idempotent. */
