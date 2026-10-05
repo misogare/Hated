@@ -8,6 +8,8 @@
  *
  * The app polls with `after` (the id of the newest message it has), so a
  * cursor is the only paging there is: no offsets to drift as messages arrive.
+ * Reading a conversation marks it read for that side, which is what the
+ * unread counts on home and in the matches list are measured against.
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
@@ -45,7 +47,7 @@ export async function listMessages(
   prisma: PrismaClient,
   userId: string,
   matchId: string,
-  options: { after?: string } = {},
+  options: { after?: string; now?: Date } = {},
 ): Promise<ListMessagesResult> {
   const access = await openConversation(prisma, userId, matchId);
   if (!access.ok) return access;
@@ -74,6 +76,9 @@ export async function listMessages(
           take: PAGE_SIZE,
         });
 
+  // A first load, or a poll that brought something, means the person has now
+  // seen everything up to this moment.
+  if (cursor === null || rows.length > 0) await markRead(prisma, matchId, access.isA, options.now ?? new Date());
   return { ok: true, messages: rows.map((row) => view(row, access.profileId)) };
 }
 
@@ -104,12 +109,17 @@ async function openConversation(
   prisma: PrismaClient,
   userId: string,
   matchId: string,
-): Promise<{ ok: true; profileId: string } | { ok: false; reason: ChatClosedReason }> {
+): Promise<{ ok: true; profileId: string; isA: boolean } | { ok: false; reason: ChatClosedReason }> {
   const match = await findOwnMatch(prisma, userId, matchId);
   if (match === null) return { ok: false, reason: 'not-found' };
   if (match.passed) return { ok: false, reason: 'passed' };
   if (!match.mutual) return { ok: false, reason: 'not-mutual' };
-  return { ok: true, profileId: match.profileId };
+  return { ok: true, profileId: match.profileId, isA: match.isA };
+}
+
+async function markRead(prisma: PrismaClient, matchId: string, isA: boolean, at: Date): Promise<void> {
+  if (isA) await prisma.match.update({ where: { id: matchId }, data: { readAAt: at } });
+  else await prisma.match.update({ where: { id: matchId }, data: { readBAt: at } });
 }
 
 function view(row: { id: string; body: string; createdAt: Date; senderId: string }, readerId: string): MessageView {

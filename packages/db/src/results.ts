@@ -13,6 +13,7 @@
 
 import type { PrismaClient } from './generated/prisma/client.js';
 import { ageOn } from './profiles.js';
+import { countUnread } from './unread.js';
 
 export interface MatchView {
   matchId: string;
@@ -28,6 +29,8 @@ export interface MatchView {
   /** Both have said hello. */
   mutual: boolean;
   passed: boolean;
+  /** Messages from the partner not yet read. */
+  unread: number;
 }
 
 export type RoundResultView =
@@ -191,6 +194,7 @@ export async function getLatestResult(
       saidHello: mine !== null,
       mutual: mine !== null && theirs !== null,
       passed: block !== null,
+      unread: await countUnread(prisma, match.id, partnerId, isA ? match.readAAt : match.readBAt),
     },
   };
 }

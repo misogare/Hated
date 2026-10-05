@@ -98,6 +98,15 @@ export {
 } from './results.js';
 
 export {
+  REPORT_REASONS,
+  listMatches,
+  reportMatch,
+  type MatchSummary,
+  type ReportReason,
+  type ReportResult,
+} from './matches.js';
+
+export {
   MAX_MESSAGE_LENGTH,
   listMessages,
   sendMessage,
