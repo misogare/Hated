@@ -10,12 +10,14 @@ import type {
   AccountView,
   AnswerValue,
   DesireInput,
+  ListMessagesResult,
   MatchActionResult,
   ProfileInput,
   QuestionnaireView,
   RoundResultView,
   SaveProfileResult,
   SaveResult,
+  SendMessageResult,
   StartSignInResult,
   VerifyCodeResult,
 } from '@hated/db';
@@ -42,6 +44,8 @@ export interface ApiServices {
   getLatestResult(userId: string): Promise<RoundResultView>;
   sayHello(userId: string, matchId: string): Promise<MatchActionResult>;
   passMatch(userId: string, matchId: string): Promise<MatchActionResult>;
+  listMessages(userId: string, matchId: string, after?: string): Promise<ListMessagesResult>;
+  sendMessage(userId: string, matchId: string, body: string): Promise<SendMessageResult>;
 }
 
 export interface ApiOptions {
@@ -71,6 +75,8 @@ const Key = z.string().min(1).max(64);
 const AnswersBody = z.object({
   answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
 });
+// The service enforces the real limit (2000); this only stops absurd payloads early.
+const MessageBody = z.object({ body: z.string().max(10_000) });
 const DesiresBody = z.object({
   desires: z.record(Key, z.object({ target: z.number(), weight: z.number() })),
 });
@@ -227,7 +233,32 @@ export function createApp(options: ApiOptions): Hono<Env> {
     return c.body(null, 204);
   });
 
+  // --- Chat ------------------------------------------------------------------
+
+  app.get('/matches/:matchId/messages', requireUser, async (c) => {
+    const after = c.req.query('after');
+    const result = await services.listMessages(c.get('userId'), c.req.param('matchId'), after || undefined);
+    if (!result.ok) return chatClosed(c, result.reason);
+    return c.json<Api.MessagesResponse>({ messages: result.messages });
+  });
+
+  app.post('/matches/:matchId/messages', requireUser, async (c) => {
+    const body = await readBody(c, MessageBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.sendMessage(c.get('userId'), c.req.param('matchId'), body.value.body);
+    if (result.ok) return c.json<Api.SendMessageResponse>({ message: result.message }, 201);
+    if (result.reason === 'invalid') return c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
+    return chatClosed(c, result.reason);
+  });
+
   return app;
+}
+
+/** Not on the match: 404; not both said hello yet: 403; someone passed: 409. */
+function chatClosed(c: Context, reason: 'not-found' | 'not-mutual' | 'passed'): Response {
+  const status = { 'not-found': 404, 'not-mutual': 403, passed: 409 } as const;
+  return c.json<Api.ApiError>({ error: reason }, status[reason]);
 }
 
 /** Parse and validate a JSON body; on failure, the 400 response to return. */

@@ -42,6 +42,8 @@ Everything except `/health` and `/auth/*` needs `Authorization: Bearer <token>`.
 | `GET /home` | Next round time, opt-in state, latest published result | |
 | `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed` |
 | `POST /matches/:id/pass` | Never be matched with them again | 404 `not-found` |
+| `GET /matches/:id/messages?after=<id>` | The conversation, oldest first; with `after`, only newer messages (the app polls this) | 403 `not-mutual` until both said hello, 409 `passed`, 404 `not-found` |
+| `POST /matches/:id/messages` `{ body }` | Send a message (trimmed, 1–2000 characters) | 201 with the message; 422 `invalid`; 403 / 409 / 404 as above |
 
 Errors are always `{ error, problems?, attemptsRemaining?, retryAfterSeconds? }`;
 internal errors are logged and returned as a bare `{ error: "internal" }`.

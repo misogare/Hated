@@ -6,11 +6,13 @@ import {
   getAnswers,
   getDesires,
   getLatestResult,
+  listMessages,
   passMatch,
   saveAnswers,
   saveDesires,
   saveProfile,
   sayHello,
+  sendMessage,
   setProfileActive,
   startSignIn,
   verifyCode,
@@ -35,5 +37,7 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     getLatestResult: (userId) => getLatestResult(prisma, userId),
     sayHello: (userId, matchId) => sayHello(prisma, userId, matchId),
     passMatch: (userId, matchId) => passMatch(prisma, userId, matchId),
+    listMessages: (userId, matchId, after) => listMessages(prisma, userId, matchId, { after }),
+    sendMessage: (userId, matchId, body) => sendMessage(prisma, userId, matchId, body),
   };
 }

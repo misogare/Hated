@@ -249,3 +249,68 @@ describe('everything else', () => {
     expect(await res.text()).not.toContain('hunter2');
   });
 });
+
+describe('chat', () => {
+  const message = { id: 'msg1', body: 'Hi Maya', sentAt: NOW.toISOString(), mine: true };
+
+  it('lists messages, passing the cursor through', async () => {
+    let seenAfter: string | undefined = 'unset';
+    const res = await app({
+      listMessages: async (_userId, _matchId, after) => {
+        seenAfter = after;
+        return { ok: true, messages: [message] };
+      },
+    }).request('/matches/m1/messages?after=msg0', { headers: bearer });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ messages: [message] });
+    expect(seenAfter).toBe('msg0');
+  });
+
+  it('treats an empty cursor as none', async () => {
+    let seenAfter: string | undefined = 'unset';
+    await app({
+      listMessages: async (_userId, _matchId, after) => {
+        seenAfter = after;
+        return { ok: true, messages: [] };
+      },
+    }).request('/matches/m1/messages?after=', { headers: bearer });
+    expect(seenAfter).toBeUndefined();
+  });
+
+  it('sends a message and answers 201 with it', async () => {
+    const res = await app({ sendMessage: async (_u, _m, body) => ({ ok: true, message: { ...message, body } }) }).request(
+      '/matches/m1/messages',
+      send('POST', { body: 'Hi Maya' }, bearer),
+    );
+
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ message });
+  });
+
+  it('maps a closed conversation to its status', async () => {
+    const cases = [
+      ['not-found', 404],
+      ['not-mutual', 403],
+      ['passed', 409],
+    ] as const;
+    for (const [reason, status] of cases) {
+      const res = await app({ listMessages: async () => ({ ok: false, reason }) }).request('/matches/m1/messages', { headers: bearer });
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual({ error: reason });
+    }
+  });
+
+  it('passes the reason for a refused message through', async () => {
+    const res = await app({
+      sendMessage: async () => ({ ok: false, reason: 'invalid', problem: 'Write something first.' }),
+    }).request('/matches/m1/messages', send('POST', { body: ' ' }, bearer));
+
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: 'invalid', problems: ['Write something first.'] });
+  });
+
+  it('needs a signed-in user', async () => {
+    expect((await app().request('/matches/m1/messages')).status).toBe(401);
+  });
+});

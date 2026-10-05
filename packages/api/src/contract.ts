@@ -140,3 +140,26 @@ export interface Home {
 export interface HelloResponse {
   mutual: boolean;
 }
+
+// --- Chat ------------------------------------------------------------------
+
+export interface ChatMessage {
+  id: string;
+  body: string;
+  sentAt: string;
+  /** Sent by the person reading. */
+  mine: boolean;
+}
+
+/** `GET /matches/:id/messages[?after=<message id>]`, oldest first. */
+export interface MessagesResponse {
+  messages: ChatMessage[];
+}
+
+export interface SendMessageRequest {
+  body: string;
+}
+
+export interface SendMessageResponse {
+  message: ChatMessage;
+}
