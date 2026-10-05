@@ -131,7 +131,14 @@ function Result({ home }: { home: HomeData }) {
   return (
     <View style={[styles.card, styles.resultCard, styles.resultMatched]}>
       <Heading tone="night">{match.mutual ? `You and ${match.partner.displayName} both said hello` : 'Your match is here'}</Heading>
-      <Button label={match.saidHello ? 'See your match' : 'Open'} tone="night" onPress={() => router.push('/reveal')} />
+      {match.mutual ? (
+        <>
+          <Button label="Open chat" tone="night" onPress={() => router.push({ pathname: '/chat', params: { matchId: match.matchId } })} />
+          <Button label="See your match" variant="text" tone="night" onPress={() => router.push('/reveal')} style={styles.inlineButton} />
+        </>
+      ) : (
+        <Button label={match.saidHello ? 'See your match' : 'Open'} tone="night" onPress={() => router.push('/reveal')} />
+      )}
     </View>
   );
 }

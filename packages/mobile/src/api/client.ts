@@ -44,6 +44,9 @@ export interface ApiClient {
   home(): Promise<Api.Home>;
   sayHello(matchId: string): Promise<Api.HelloResponse>;
   pass(matchId: string): Promise<void>;
+  /** The conversation, or with `after`, only the messages newer than that one. */
+  messages(matchId: string, after?: string): Promise<Api.MessagesResponse>;
+  sendMessage(matchId: string, body: string): Promise<Api.SendMessageResponse>;
 }
 
 export interface ClientOptions {
@@ -96,6 +99,13 @@ export function createApiClient(options: ClientOptions): ApiClient {
     home: () => call('GET', '/home'),
     sayHello: (matchId) => call('POST', `/matches/${encodeURIComponent(matchId)}/hello`),
     pass: (matchId) => call('POST', `/matches/${encodeURIComponent(matchId)}/pass`),
+    messages: (matchId, after) =>
+      call(
+        'GET',
+        `/matches/${encodeURIComponent(matchId)}/messages${after === undefined ? '' : `?after=${encodeURIComponent(after)}`}`,
+      ),
+    sendMessage: (matchId, body) =>
+      call('POST', `/matches/${encodeURIComponent(matchId)}/messages`, { body } satisfies Api.SendMessageRequest),
   };
 }
 
@@ -111,6 +121,10 @@ export function describeError(error: unknown): string {
       return "We couldn't send the email just now. Please try again in a minute.";
     case 'invalid':
       return error.body?.problems?.join(' ') ?? 'Please check your answers.';
+    case 'not-mutual':
+      return 'The conversation opens once you have both said hello.';
+    case 'passed':
+      return 'This conversation has ended.';
     default:
       return 'Something went wrong. Please try again.';
   }

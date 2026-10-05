@@ -35,7 +35,7 @@ for quick layout checks; the phone is the real target.
 
 | Path | What |
 | --- | --- |
-| `src/app/` | Routes (Expo Router). Signed-out: `index` (welcome), `how-it-works`, `sign-in/*`. Signed-in: `start`, `onboarding/*`, `home`, `reveal`, `no-match`. |
+| `src/app/` | Routes (Expo Router). Signed-out: `index` (welcome), `how-it-works`, `sign-in/*`. Signed-in: `start`, `onboarding/*`, `home`, `reveal`, `no-match`, `chat`, `settings`. |
 | `src/app/_layout.tsx` | Loads the fonts and decides which routes exist with `Stack.Protected`, so signing in or out moves you to the right place. |
 | `src/session.tsx` | The session: token in the keychain/keystore (`expo-secure-store`), the account, and an API client that signs out on any 401. |
 | `src/api/client.ts` | Typed calls to the API, plus friendly wording for its errors. |
@@ -46,6 +46,10 @@ for quick layout checks; the phone is the real target.
 Onboarding resumes where it was left: `start` reads the account's onboarding
 progress. The questionnaire saves each answer as it goes, and the profile,
 answers and "what matters" screens double as editors from home (`?edit=1`).
+
+Chat opens from home or the reveal once both people have said hello. It polls
+for new messages every 3 seconds while the screen is open, and closes for both
+if either passes.
 
 "What matters" starts each trait not yet saved at "Nice to have", aimed at the
 middle of the scale, as in the prototype. "Don't mind" leaves a trait out of

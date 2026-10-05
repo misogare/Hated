@@ -90,7 +90,7 @@ export default function Reveal() {
     );
   }
 
-  const { partner } = match;
+  const { partner, matchId } = match;
   return (
     <Screen tone="night" scroll footer={renderActions()}>
       <BackButton tone="night" />
@@ -150,13 +150,25 @@ export default function Reveal() {
           </View>
         );
       case 'said-hello':
-        return (
+        return mutual ? (
+          <>
+            <View style={[styles.card, styles.helloCard]}>
+              <Heading tone="night">You both said hello</Heading>
+              <Body tone="night" style={styles.helloText}>
+                {partner.displayName} said hello too, so your conversation is open.
+              </Body>
+            </View>
+            <Button
+              label="Open chat"
+              tone="night"
+              onPress={() => router.push({ pathname: '/chat', params: { matchId } })}
+            />
+          </>
+        ) : (
           <View style={[styles.card, styles.helloCard]}>
-            <Heading tone="night">{mutual ? 'You both said hello' : 'Hello sent'}</Heading>
+            <Heading tone="night">Hello sent</Heading>
             <Body tone="night" style={styles.helloText}>
-              {mutual
-                ? `${partner.displayName} said hello too. Conversations are coming soon.`
-                : `When ${partner.displayName} says hello too, a conversation opens for you both.`}
+              When {partner.displayName} says hello too, a conversation opens for you both.
             </Body>
           </View>
         );

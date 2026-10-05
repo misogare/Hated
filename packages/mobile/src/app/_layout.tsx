@@ -80,6 +80,7 @@ function Routes() {
         <Stack.Screen name="reveal" />
         <Stack.Screen name="no-match" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="chat" />
       </Stack.Protected>
     </Stack>
   );
