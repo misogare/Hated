@@ -8,6 +8,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import type { NotificationPrefs } from './notification-prefs.js';
 
 /** Nobody under this age can hold a profile. */
 export const MIN_AGE = 18;
@@ -46,6 +47,8 @@ export interface AccountView {
   } | null;
   /** Which onboarding steps are done, so the app knows where to resume. */
   onboarding: { profile: boolean; answers: boolean };
+  /** Which push notifications they want. */
+  notifications: NotificationPrefs;
 }
 
 /** Whole years between a birth date and `now`, by UTC calendar date. */
@@ -162,6 +165,7 @@ export async function getAccount(
             isActive: profile.isActive,
           },
     onboarding: { profile: profile !== null, answers: (profile?.responses.length ?? 0) > 0 },
+    notifications: { messages: user.notifyMessages, hellos: user.notifyHellos, rounds: user.notifyRounds },
   };
 }
 

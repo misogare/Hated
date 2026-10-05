@@ -11,10 +11,11 @@
  * which the app uses to open the right screen when tapped. Delivery problems
  * are logged and swallowed: a notification is a courtesy, and must never make
  * the action that caused it fail. Tokens the push service rejects as gone are
- * forgotten.
+ * forgotten. Each kind goes only to people who have not turned it off.
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import type { NotificationKind } from './notification-prefs.js';
 import type { PushMessage, PushSender } from './push-sender.js';
 import { pushTokensFor, removePushTokens } from './push-tokens.js';
 
@@ -41,10 +42,13 @@ export function createNotifier(
 ): Notifier {
   const log = options.log ?? ((line: string) => console.error(line));
 
-  /** Send one notification to every device of each person; never throws. */
-  async function deliver(notes: Array<{ userId: string; title: string; body: string; data: Record<string, string> }>): Promise<void> {
+  /** Send one notification to every device of each person who wants this kind; never throws. */
+  async function deliver(
+    kind: NotificationKind,
+    notes: Array<{ userId: string; title: string; body: string; data: Record<string, string> }>,
+  ): Promise<void> {
     try {
-      const tokens = await pushTokensFor(prisma, notes.map((note) => note.userId));
+      const tokens = await pushTokensFor(prisma, notes.map((note) => note.userId), kind);
       const messages: PushMessage[] = notes.flatMap((note) =>
         (tokens.get(note.userId) ?? []).map((to) => ({ to, title: note.title, body: note.body, data: note.data })),
       );
@@ -82,7 +86,7 @@ export function createNotifier(
       const sender = pair.find((side) => side.userId === senderUserId);
       const recipient = pair.find((side) => side.userId !== senderUserId);
       if (sender === undefined || recipient === undefined) return;
-      await deliver([
+      await deliver('messages', [
         { userId: recipient.userId, title: 'HateD', body: `New message from ${sender.displayName}`, data: { type: 'message', matchId } },
       ]);
     },
@@ -93,7 +97,7 @@ export function createNotifier(
       const latest = pair.find((side) => side.userId === userId);
       const first = pair.find((side) => side.userId !== userId);
       if (latest === undefined || first === undefined) return;
-      await deliver([
+      await deliver('hellos', [
         {
           userId: first.userId,
           title: `You and ${latest.displayName} both said hello`,
@@ -108,6 +112,7 @@ export function createNotifier(
         .findMany({ where: { roundId }, select: { matched: true, profile: { select: { userId: true } } } })
         .catch(() => []);
       await deliver(
+        'rounds',
         participants.map((participant) =>
           participant.matched
             ? { userId: participant.profile.userId, title: 'Your match is here', body: "This round's match is ready when you are.", data: { type: 'round' } }

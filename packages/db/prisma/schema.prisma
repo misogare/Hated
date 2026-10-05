@@ -71,6 +71,12 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  /// Which push notifications the person wants: new messages, both saying
+  /// hello, and round results. On until they turn one off.
+  notifyMessages Boolean @default(true)
+  notifyHellos   Boolean @default(true)
+  notifyRounds   Boolean @default(true)
+
   profile       Profile?
   verifications InstitutionVerification[]
   sessions      Session[]

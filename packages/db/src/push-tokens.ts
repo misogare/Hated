@@ -1,6 +1,7 @@
 /** Which devices can receive a person's push notifications. */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import { NOTIFY_COLUMN, type NotificationKind } from './notification-prefs.js';
 
 /** What Expo push tokens look like: `ExponentPushToken[...]` (or `ExpoPushToken[...]`). */
 const EXPO_PUSH_TOKEN = /^Expo(nent)?PushToken\[[^\]\s]{1,200}\]$/;
@@ -40,9 +41,19 @@ export async function unregisterAllPushTokens(prisma: PrismaClient, userId: stri
   await prisma.pushToken.deleteMany({ where: { userId } });
 }
 
-/** Tokens for each of these people, by user id. */
-export async function pushTokensFor(prisma: PrismaClient, userIds: readonly string[]): Promise<Map<string, string[]>> {
-  const rows = await prisma.pushToken.findMany({ where: { userId: { in: [...userIds] } }, select: { userId: true, token: true } });
+/**
+ * Tokens for each of these people, by user id. With `kind`, only people who
+ * still want that kind of notification.
+ */
+export async function pushTokensFor(
+  prisma: PrismaClient,
+  userIds: readonly string[],
+  kind?: NotificationKind,
+): Promise<Map<string, string[]>> {
+  const rows = await prisma.pushToken.findMany({
+    where: { userId: { in: [...userIds] }, ...(kind === undefined ? {} : { user: { [NOTIFY_COLUMN[kind]]: true } }) },
+    select: { userId: true, token: true },
+  });
   const byUser = new Map<string, string[]>();
   for (const row of rows) byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.token]);
   return byUser;

@@ -15,6 +15,7 @@ const ACCOUNT: AccountView = {
   institution: { name: 'Victoria University', domain: 'vu.edu.au' },
   profile: { displayName: 'Sam', birthDate: '2003-04-20', age: 23, gender: 'woman', seeking: [], isActive: true },
   onboarding: { profile: true, answers: true },
+  notifications: { messages: true, hellos: true, rounds: true },
 };
 
 /** Every service fails loudly unless a test stubs it. */

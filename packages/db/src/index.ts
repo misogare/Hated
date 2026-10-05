@@ -118,6 +118,14 @@ export {
 export { createNotifier, silentNotifier, type Notifier } from './notify.js';
 
 export {
+  NOTIFICATION_KINDS,
+  getNotificationPrefs,
+  setNotificationPrefs,
+  type NotificationKind,
+  type NotificationPrefs,
+} from './notification-prefs.js';
+
+export {
   REPORT_REASONS,
   listMatches,
   reportMatch,

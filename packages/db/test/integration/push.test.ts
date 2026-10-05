@@ -1,7 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
+import { getNotificationPrefs, setNotificationPrefs } from '../../src/notification-prefs.js';
 import { createNotifier } from '../../src/notify.js';
+import { getAccount } from '../../src/profiles.js';
 import type { PushMessage, PushSender, PushTicket } from '../../src/push-sender.js';
 import { pushTokensFor, registerPushToken, unregisterAllPushTokens, unregisterPushToken } from '../../src/push-tokens.js';
 import { sayHello } from '../../src/results.js';
@@ -65,6 +67,26 @@ describe.skipIf(!hasTestDatabase)('push notifications (Postgres)', () => {
     });
   });
 
+  describe('preferences', () => {
+    it('starts with everything on, and changes only the kinds given', async () => {
+      const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+      expect((await getAccount(prisma, sam.userId))?.notifications).toEqual({ messages: true, hellos: true, rounds: true });
+
+      expect(await setNotificationPrefs(prisma, sam.userId, { rounds: false })).toEqual({ messages: true, hellos: true, rounds: false });
+      expect(await setNotificationPrefs(prisma, sam.userId, { messages: false, rounds: true })).toEqual({
+        messages: false,
+        hellos: true,
+        rounds: true,
+      });
+      expect(await getNotificationPrefs(prisma, sam.userId)).toEqual({ messages: false, hellos: true, rounds: true });
+    });
+
+    it('is null for an account that does not exist', async () => {
+      expect(await setNotificationPrefs(prisma, 'nobody', { messages: false })).toBeNull();
+      expect(await getNotificationPrefs(prisma, 'nobody')).toBeNull();
+    });
+  });
+
   describe('notifier', () => {
     async function pair() {
       const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
@@ -108,6 +130,24 @@ describe.skipIf(!hasTestDatabase)('push notifications (Postgres)', () => {
 
       expect(sent).toHaveLength(3);
       expect(new Set(sent.map((m) => m.title))).toEqual(new Set(['Your match is here']));
+    });
+
+    it('sends nothing of a kind someone turned off, on any of their devices', async () => {
+      const { sam, maya, match } = await pair();
+      await setNotificationPrefs(prisma, sam.userId, { messages: false, rounds: false });
+      const { sent, sender } = fakeSender();
+      const notifier = createNotifier(prisma, sender);
+
+      await notifier.messageSent(match.id, maya.userId);
+      expect(sent).toEqual([]);
+
+      await notifier.roundPublished(match.roundId);
+      expect(sent.map((m) => m.to)).toEqual([MAYA]);
+
+      await sayHello(prisma, sam.userId, match.id);
+      await sayHello(prisma, maya.userId, match.id);
+      await notifier.becameMutual(match.id, maya.userId);
+      expect(sent.map((m) => m.to).slice(1).sort()).toEqual([TABLET, PHONE].sort());
     });
 
     it('forgets devices the push service says are gone, and never throws', async () => {
