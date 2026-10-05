@@ -280,7 +280,7 @@ describe('verifyCode', () => {
     const { id, code } = await start();
     const result = await verifyCode(client, { verificationId: id, code }, options);
 
-    expect(result).toEqual({ ok: true, verificationId: id, verifiedAt: clock, accountEmailVerified: false });
+    expect(result).toEqual({ ok: true, verificationId: id, userId: 'u1', verifiedAt: clock, accountEmailVerified: false });
     const row = store.verifications.get(id)!;
     expect(row.status).toBe('VERIFIED');
     expect(row.verifiedAt).toEqual(clock);

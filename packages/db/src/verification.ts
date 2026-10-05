@@ -113,6 +113,8 @@ export type VerifyCodeResult =
   | {
       ok: true;
       verificationId: string;
+      /** The account that requested the code, now proven to control the address. */
+      userId: string;
       verifiedAt: Date;
       /**
        * True when the verified address is the account's own email, which this
@@ -305,6 +307,7 @@ export async function verifyCode(
   return {
     ok: true,
     verificationId: verification.id,
+    userId: verification.userId,
     verifiedAt: now,
     accountEmailVerified: account.count > 0,
   };
@@ -354,6 +357,22 @@ function domainSuffixes(domain: string): string[] {
     suffixes.push(labels.slice(i).join('.'));
   }
   return suffixes;
+}
+
+/**
+ * The allowlisted institution an email address belongs to, or null. Lets a
+ * caller refuse an address before creating anything for it.
+ */
+export async function findInstitutionForEmail(
+  prisma: PrismaClient,
+  email: string,
+): Promise<{ id: string; domain: string; name: string; type: VerificationType } | null> {
+  const domain = domainOf(normalizeEmail(email));
+  if (domain === null) return null;
+  const institution = await findInstitution(prisma, domain);
+  return institution === null
+    ? null
+    : { id: institution.id, domain: institution.domain, name: institution.name, type: institution.type };
 }
 
 /** Canonical form of an email address: trimmed and lowercased. */

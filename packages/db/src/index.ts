@@ -41,6 +41,13 @@ export {
 } from './round-info.js';
 
 export {
+  startSignIn,
+  type StartSignInOptions,
+  type StartSignInResult,
+} from './sign-in.js';
+
+export {
+  findInstitutionForEmail,
   normalizeEmail,
   requestVerificationCode,
   startVerification,

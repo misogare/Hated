@@ -18,5 +18,10 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',
+    // Creates and migrates the integration database when TEST_DATABASE_URL is set.
+    globalSetup: ['test/integration/global-setup.ts'],
+    // Integration files share one database and empty it per test, so files run
+    // one at a time. The unit suites are fast enough that this costs little.
+    fileParallelism: false,
   },
 });
