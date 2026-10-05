@@ -1,0 +1,28 @@
+# Local Postgres for HateD development.
+#
+#   docker compose up -d
+#
+# Then in packages/db: copy `.env.example` to `.env` and run `npm run migrate`.
+# The credentials below are dev-only and match packages/db/.env.example.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hated-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hated
+      POSTGRES_PASSWORD: hated
+      POSTGRES_DB: hated
+    ports:
+      - "5432:5432"
+    volumes:
+      - hated-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hated -d hated"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hated-pgdata:
