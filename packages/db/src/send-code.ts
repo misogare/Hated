@@ -3,9 +3,10 @@
  * Send a verification code.
  *
  * Starts an institution verification and emails the one-time code through the
- * configured transport. Real sends go to Resend (`RESEND_API_KEY`); pass
- * `--print` (or run without a key) to print the code with the console mailer
- * instead, which is what local development wants.
+ * configured transport: SMTP when `SMTP_HOST` is set, else Resend when
+ * `RESEND_API_KEY` is set (see `mail-config.ts`). Pass `--print` (or run with
+ * neither configured) to print the code with the console mailer instead, which
+ * is what local development wants.
  *
  * Usage:
  *   npm run send-code -w @hated/db -- --email student@mit.edu
@@ -13,13 +14,14 @@
  *   npm run send-code -w @hated/db -- --email a@berkeley.edu --user <userId> --json
  *
  * Flags:
- *   --email <addr>   recipient (required); must be an allowlisted .edu/.gov
- *   --user <id>      account id; default: resolved from the email in `User`
- *   --print          deliver with the console mailer instead of Resend
- *   --from <addr>    sender for Resend (default $MAIL_FROM)
- *   --app <name>     product name in the email copy (default HateD)
- *   --ttl <minutes>  override the code lifetime (default 10)
- *   --json           print the outcome as JSON
+ *   --email <addr>       recipient (required); must be an allowlisted .edu/.gov
+ *   --user <id>          account id; default: resolved from the email in `User`
+ *   --transport <kind>   smtp, resend, or console (default $MAIL_TRANSPORT, else auto)
+ *   --print              shorthand for --transport console
+ *   --from <addr>        sender (default $MAIL_FROM)
+ *   --app <name>         product name in the email copy (default HateD)
+ *   --ttl <minutes>      override the code lifetime (default 10)
+ *   --json               print the outcome as JSON
  */
 
 import 'dotenv/config';
@@ -29,15 +31,20 @@ import { fileURLToPath } from 'node:url';
 
 import { createPrismaClient } from './index.js';
 import {
-  createConsoleMailer,
-  createResendMailer,
-  type Mailer,
-} from './mailer.js';
+  MAIL_TRANSPORTS,
+  createMailer,
+  explainMailError,
+  isMailTransportKind,
+  resolveMailConfig,
+  type MailConfig,
+  type MailTransportKind,
+} from './mail-config.js';
 import { normalizeEmail, requestVerificationCode } from './verification.js';
 
 interface CliArgs {
   email?: string;
   user?: string;
+  transport?: MailTransportKind;
   print: boolean;
   from?: string;
   app?: string;
@@ -73,6 +80,14 @@ function parseArgs(argv: readonly string[]): CliArgs {
       case '--user':
         args.user = text();
         break;
+      case '--transport': {
+        const kind = text();
+        if (!isMailTransportKind(kind)) {
+          throw new Error(`--transport must be one of ${MAIL_TRANSPORTS.join(', ')}, got ${kind}`);
+        }
+        args.transport = kind;
+        break;
+      }
       case '--from':
         args.from = text();
         break;
@@ -112,32 +127,19 @@ function printHelp(): void {
     npm run send-code -w @hated/db -- --email <addr> [flags]
 
   Flags:
-    --email <addr>   recipient (required); must be an allowlisted .edu/.gov
-    --user <id>      account id; default: resolved from the email in User
-    --print          deliver with the console mailer instead of Resend
-    --from <addr>    sender for Resend (default $MAIL_FROM)
-    --app <name>     product name in the email copy (default HateD)
-    --ttl <minutes>  override the code lifetime (default 10)
-    --json           print the outcome as JSON
+    --email <addr>       recipient (required); must be an allowlisted .edu/.gov
+    --user <id>          account id; default: resolved from the email in User
+    --transport <kind>   smtp, resend, or console (default $MAIL_TRANSPORT, else auto)
+    --print              shorthand for --transport console
+    --from <addr>        sender (default $MAIL_FROM)
+    --app <name>         product name in the email copy (default HateD)
+    --ttl <minutes>      override the code lifetime (default 10)
+    --json               print the outcome as JSON
+
+  Auto-detection picks SMTP when SMTP_HOST is set, then Resend when
+  RESEND_API_KEY is set, then the console. Run \`npm run mail:check\` to test
+  the transport without touching the database.
 `);
-}
-
-/** Pick the transport: Resend when a key and sender exist, else the console. */
-function resolveMailer(args: CliArgs): { mailer: Mailer; kind: 'console' | 'resend' } {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = args.from ?? process.env.MAIL_FROM;
-
-  if (args.print || !apiKey) {
-    if (!args.print && !apiKey) {
-      console.error('RESEND_API_KEY is not set; falling back to --print (console mailer).');
-    }
-    return { mailer: createConsoleMailer(), kind: 'console' };
-  }
-  if (from === undefined || from.trim().length === 0) {
-    throw new Error('No sender address. Set MAIL_FROM or pass --from (e.g. "HateD <codes@x.com>").');
-  }
-
-  return { mailer: createResendMailer({ apiKey, from }), kind: 'resend' };
 }
 
 async function main(): Promise<void> {
@@ -150,6 +152,23 @@ async function main(): Promise<void> {
     console.error('Pass --email <addr>. Run with --help for usage.');
     process.exitCode = 1;
     return;
+  }
+
+  // Settle the transport before touching the database, so a configuration
+  // mistake fails fast and never leaves a pending code behind.
+  let config: MailConfig;
+  try {
+    config = resolveMailConfig(process.env, {
+      transport: args.print ? 'console' : args.transport,
+      from: args.from,
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
+  if (config.kind === 'console' && config.fallback) {
+    console.error('No mail transport is configured (SMTP_HOST or RESEND_API_KEY); printing the code instead.');
   }
 
   const prisma = createPrismaClient();
@@ -167,12 +186,12 @@ async function main(): Promise<void> {
       userId = user.id;
     }
 
-    const { mailer, kind } = resolveMailer(args);
+    const kind = config.kind;
     const result = await requestVerificationCode(
       prisma,
       { userId, email },
       {
-        mailer,
+        mailer: createMailer(config),
         ...(args.app === undefined ? {} : { appName: args.app }),
         ...(args.ttlMinutes === undefined ? {} : { ttlMs: args.ttlMinutes * 60_000 }),
       },
@@ -190,6 +209,8 @@ async function main(): Promise<void> {
       } else {
         const detail = result.error instanceof Error ? result.error.message : String(result.error);
         console.error(`Delivery failed; the pending code was expired. ${detail}`);
+        const hint = explainMailError(result.error, config);
+        if (hint !== undefined) console.error(hint);
       }
       process.exitCode = 1;
       return;

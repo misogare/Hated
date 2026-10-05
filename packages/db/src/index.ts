@@ -70,6 +70,28 @@ export {
   type VerificationEmailInput,
 } from './mailer.js';
 
+export {
+  createSmtpMailer,
+  smtpTransportOptions,
+  type SmtpMailer,
+  type SmtpMailerOptions,
+  type SmtpTransport,
+} from './smtp-mailer.js';
+
+export {
+  MAIL_TRANSPORTS,
+  createMailer,
+  describeMailConfig,
+  explainMailError,
+  isMailTransportKind,
+  resolveMailConfig,
+  type ConfiguredMailer,
+  type MailConfig,
+  type MailEnv,
+  type MailTransportKind,
+  type ResolveMailConfigOptions,
+} from './mail-config.js';
+
 export interface CreatePrismaClientOptions {
   /** Overrides `process.env.DATABASE_URL`. */
   connectionString?: string;

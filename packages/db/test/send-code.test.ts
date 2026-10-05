@@ -28,6 +28,12 @@ describe('send-code parseArgs', () => {
     expect(args.ttlMinutes).toBe(15);
   });
 
+  it('reads a transport and rejects an unknown one', () => {
+    expect(parseArgs(['--transport', 'smtp']).transport).toBe('smtp');
+    expect(parseArgs([]).transport).toBeUndefined();
+    expect(() => parseArgs(['--transport', 'fax'])).toThrow(/--transport must be one of/);
+  });
+
   it('turns on the boolean flags', () => {
     expect(parseArgs(['--print']).print).toBe(true);
     expect(parseArgs(['--json']).json).toBe(true);

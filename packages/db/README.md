@@ -253,14 +253,15 @@ subdomains. The boundary is a dot label, so `notvu.edu.au` never matches
 
 ```ts
 import {
+  createMailer,
   createPrismaClient,
-  createResendMailer,
   requestVerificationCode,
+  resolveMailConfig,
   verifyCode,
 } from '@hated/db';
 
 const prisma = createPrismaClient();
-const mailer = createResendMailer({ apiKey: process.env.RESEND_API_KEY!, from: 'HateD <codes@x.com>' });
+const mailer = createMailer(resolveMailConfig(process.env)); // SMTP, Resend, or console
 
 const sent = await requestVerificationCode(
   prisma,
@@ -278,6 +279,11 @@ const result = await verifyCode(prisma, { verificationId: sent.verificationId, c
 Email goes through a one-method `Mailer` interface (`src/mailer.ts`), so the flow
 isn't coupled to a provider:
 
+- `createSmtpMailer({ host, port, user, pass, from })` (`src/smtp-mailer.ts`)
+  sends through any SMTP relay — Brevo, Gmail, SMTP2GO, … — via `nodemailer`.
+  Port 587 must upgrade with STARTTLS (credentials never go in the clear), 465
+  uses implicit TLS, and every phase times out after 15 s instead of nodemailer's
+  minutes-long defaults.
 - `createResendMailer({ apiKey, from })` posts to [Resend](https://resend.com)'s
   HTTP API using the platform `fetch` — no email SDK dependency.
 - `createConsoleMailer()` prints the message (and the code) for local
@@ -288,11 +294,27 @@ isn't coupled to a provider:
 If the mailer throws, the pending request is expired before the error surfaces,
 so a code the recipient never received cannot be redeemed.
 
+`resolveMailConfig(env)` + `createMailer(config)` (`src/mail-config.ts`) pick
+the transport from the environment, so every entry point agrees:
+
+1. `MAIL_TRANSPORT` (`smtp` | `resend` | `console`) when set;
+2. otherwise SMTP when `SMTP_HOST` is set;
+3. then Resend when `RESEND_API_KEY` is set;
+4. then the console mailer.
+
+A transport that is selected but incomplete throws an error naming every missing
+variable. It never falls through to the next provider, so a half-configured SMTP
+setup cannot quietly keep sending through Resend.
+
 Environment variables (see `.env.example`):
 
-- `RESEND_API_KEY` — Resend API key. Without it the `send-code` CLI falls back to
-  the console mailer.
+- `MAIL_TRANSPORT` — force a transport; empty means auto-detect as above.
 - `MAIL_FROM` — verified sender, e.g. `HateD <codes@yourdomain.com>`.
+- `RESEND_API_KEY` — Resend API key.
+- `SMTP_HOST`, `SMTP_PORT` (default `587`), `SMTP_USER`, `SMTP_PASS` — the relay
+  and its login. `SMTP_PASS` is the provider's SMTP key or app password, never
+  the account password.
+- `SMTP_SECURE` — `true` for implicit TLS; defaults to `true` only on port 465.
 
 Delivering to anyone other than the Resend account's own address requires a
 verified sending domain. See [`docs/email-sender-domain.md`](../../docs/email-sender-domain.md)
@@ -304,7 +326,7 @@ for the provider comparison, the exact DNS records, and the free-subdomain route
 # prints the code (console mailer) — no provider key needed
 npm run send-code -- --email student@mit.edu --print
 
-# real send via Resend
+# real send via the configured transport (SMTP or Resend)
 npm run send-code -- --email student@mit.edu
 ```
 
@@ -312,7 +334,8 @@ npm run send-code -- --email student@mit.edu
 | --- | --- |
 | `--email <addr>` | recipient, must be an allowlisted `.edu`/`.gov` (required) |
 | `--user <id>` | account id; default: resolved from `User` by email |
-| `--print` | use the console mailer instead of Resend |
+| `--transport <kind>` | `smtp`, `resend`, or `console`; default `MAIL_TRANSPORT`, else auto-detect |
+| `--print` | shorthand for `--transport console` |
 | `--from <addr>` / `--app <name>` | sender override / product name in the copy |
 | `--ttl <minutes>` | code lifetime (default 10) |
 
