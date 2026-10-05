@@ -294,6 +294,10 @@ Environment variables (see `.env.example`):
   the console mailer.
 - `MAIL_FROM` — verified sender, e.g. `HateD <codes@yourdomain.com>`.
 
+Delivering to anyone other than the Resend account's own address requires a
+verified sending domain. See [`docs/email-sender-domain.md`](../../docs/email-sender-domain.md)
+for the provider comparison, the exact DNS records, and the free-subdomain route.
+
 ### The `send-code` helper CLI
 
 ```bash
