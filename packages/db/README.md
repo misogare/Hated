@@ -387,6 +387,10 @@ Guarantees (both `startVerification` and `requestVerificationCode`):
 - Locks out after `maxAttempts` wrong guesses (default 5); each failure counts.
 - Issuing a new code expires any earlier pending request for the same address
   and type, so only the newest code can be redeemed.
+- When the verified address is the account's own email, the same transaction
+  sets `User.emailVerified` (`accountEmailVerified` in the result). A different
+  address, such as a `.edu` proven by someone who signed up with Gmail, leaves it
+  untouched: being a verified student and owning the login email are separate facts.
 
 The low-level `startVerification` remains available when the caller wants to do
 its own delivery. All of these take an optional `VerificationServiceOptions`

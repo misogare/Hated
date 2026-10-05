@@ -139,6 +139,9 @@ async function main(): Promise<void> {
     console.log('  Code accepted');
     console.log(`    verification   ${result.verificationId}`);
     console.log(`    verified at    ${result.verifiedAt.toISOString()}`);
+    console.log(
+      `    account email  ${result.accountEmailVerified ? 'verified (same address)' : 'unchanged (different address)'}`,
+    );
     console.log('');
   } finally {
     await prisma.$disconnect();

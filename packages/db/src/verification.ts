@@ -10,7 +10,8 @@
  *   requestVerificationCode -> startVerification + deliver the code through a
  *                              `Mailer` (the product-facing entry point)
  *   verifyCode              -> constant-time compare, single use,
- *                              attempt-limited, time-limited
+ *                              attempt-limited, time-limited; also marks the
+ *                              account email verified when it is the same address
  *
  * Security notes:
  * - The code is hashed with scrypt and a per-request random salt. A six-digit
@@ -109,7 +110,16 @@ export type VerifyFailureReason =
   | 'invalid-code';
 
 export type VerifyCodeResult =
-  | { ok: true; verificationId: string; verifiedAt: Date }
+  | {
+      ok: true;
+      verificationId: string;
+      verifiedAt: Date;
+      /**
+       * True when the verified address is the account's own email, which this
+       * redemption therefore also marked verified (`User.emailVerified`).
+       */
+      accountEmailVerified: boolean;
+    }
   | { ok: false; reason: VerifyFailureReason; attemptsRemaining?: number };
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
@@ -276,12 +286,28 @@ export async function verifyCode(
       : { ok: false, reason: 'invalid-code', attemptsRemaining: maxAttempts - attempts };
   }
 
-  await prisma.institutionVerification.update({
-    where: { id: verification.id },
-    data: { status: 'VERIFIED', verifiedAt: now, consumedAt: now },
-  });
+  // Proving control of the address the code went to also proves the account
+  // email when they are the same address. The `where` makes the database do
+  // that comparison, so a user whose email has since changed is left alone.
+  // One transaction: the code is spent by this update, so if the flag were
+  // written separately and failed, it could never be set by retrying.
+  const [, account] = await prisma.$transaction([
+    prisma.institutionVerification.update({
+      where: { id: verification.id },
+      data: { status: 'VERIFIED', verifiedAt: now, consumedAt: now },
+    }),
+    prisma.user.updateMany({
+      where: { id: verification.userId, email: verification.email },
+      data: { emailVerified: true },
+    }),
+  ]);
 
-  return { ok: true, verificationId: verification.id, verifiedAt: now };
+  return {
+    ok: true,
+    verificationId: verification.id,
+    verifiedAt: now,
+    accountEmailVerified: account.count > 0,
+  };
 }
 
 function expire(prisma: PrismaClient, id: string): Promise<unknown> {

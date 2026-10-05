@@ -47,15 +47,46 @@ interface FakeVerification {
   institutionId: string | null;
 }
 
+interface FakeUser {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+}
+
 /** Minimal in-memory stand-in for the Prisma delegates the service uses. */
 class FakeStore {
   readonly institutions = new Map<string, FakeInstitution>();
   readonly verifications = new Map<string, FakeVerification>();
+  readonly users = new Map<string, FakeUser>();
   private sequence = 0;
 
   addInstitution(institution: Omit<FakeInstitution, 'id'>): void {
     this.institutions.set(institution.domain, { id: `inst-${++this.sequence}`, ...institution });
   }
+
+  addUser(id: string, email: string): FakeUser {
+    const user = { id, email, emailVerified: false };
+    this.users.set(id, user);
+    return user;
+  }
+
+  /** Batch form only: the operations already ran, so just collect their results. */
+  readonly $transaction = (operations: Promise<unknown>[]) => Promise.all(operations);
+
+  readonly user = {
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: { id: string; email: string };
+      data: Partial<FakeUser>;
+    }) => {
+      const user = this.users.get(where.id);
+      if (user === undefined || user.email !== where.email) return { count: 0 };
+      Object.assign(user, data);
+      return { count: 1 };
+    },
+  };
 
   readonly institution = {
     findMany: async ({
@@ -249,11 +280,43 @@ describe('verifyCode', () => {
     const { id, code } = await start();
     const result = await verifyCode(client, { verificationId: id, code }, options);
 
-    expect(result).toEqual({ ok: true, verificationId: id, verifiedAt: clock });
+    expect(result).toEqual({ ok: true, verificationId: id, verifiedAt: clock, accountEmailVerified: false });
     const row = store.verifications.get(id)!;
     expect(row.status).toBe('VERIFIED');
     expect(row.verifiedAt).toEqual(clock);
     expect(row.consumedAt).toEqual(clock);
+  });
+
+  it('marks the account email verified when it is the verified address', async () => {
+    const user = store.addUser('u1', 'a@example.edu');
+    const { id, code } = await start();
+
+    const result = await verifyCode(client, { verificationId: id, code }, options);
+
+    expect(result).toMatchObject({ ok: true, accountEmailVerified: true });
+    expect(user.emailVerified).toBe(true);
+  });
+
+  it('leaves the account email alone when the user signed up with another address', async () => {
+    const user = store.addUser('u1', 'someone@gmail.com');
+    const other = store.addUser('u2', 'a@example.edu');
+    const { id, code } = await start();
+
+    const result = await verifyCode(client, { verificationId: id, code }, options);
+
+    expect(result).toMatchObject({ ok: true, accountEmailVerified: false });
+    expect(user.emailVerified).toBe(false);
+    // Another account that owns the address is not the one that proved it.
+    expect(other.emailVerified).toBe(false);
+  });
+
+  it('does not mark the account email verified on a failed attempt', async () => {
+    const user = store.addUser('u1', 'a@example.edu');
+    const { id, code } = await start();
+
+    await verifyCode(client, { verificationId: id, code: wrongCode(code) }, options);
+
+    expect(user.emailVerified).toBe(false);
   });
 
   it('is single use: a redeemed code cannot be replayed', async () => {
