@@ -316,9 +316,11 @@ Environment variables (see `.env.example`):
   the account password.
 - `SMTP_SECURE` — `true` for implicit TLS; defaults to `true` only on port 465.
 
-Delivering to anyone other than the Resend account's own address requires a
-verified sending domain. See [`docs/email-sender-domain.md`](../../docs/email-sender-domain.md)
-for the provider comparison, the exact DNS records, and the free-subdomain route.
+Resend's sandbox sender reaches only the Resend account's own address. Brevo over
+SMTP reaches anyone once a single sender address is verified, with no domain
+needed. See [`docs/email-sender-domain.md`](../../docs/email-sender-domain.md) for
+the Brevo setup steps, the provider comparison, the exact DNS records for each
+provider, and the free-subdomain route.
 
 ### The `mail:check` helper CLI
 
