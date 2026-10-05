@@ -49,6 +49,10 @@ export interface ApiClient {
   /** The conversation, or with `after`, only the messages newer than that one. */
   messages(matchId: string, after?: string): Promise<Api.MessagesResponse>;
   sendMessage(matchId: string, body: string): Promise<Api.SendMessageResponse>;
+  /** Every match from published rounds, newest first. */
+  matches(): Promise<Api.MatchesResponse>;
+  /** Report a match; this also ends it. */
+  report(matchId: string, report: Api.ReportRequest): Promise<void>;
 }
 
 export interface ClientOptions {
@@ -110,6 +114,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
       ),
     sendMessage: (matchId, body) =>
       call('POST', `/matches/${encodeURIComponent(matchId)}/messages`, { body } satisfies Api.SendMessageRequest),
+    matches: () => call('GET', '/matches'),
+    report: (matchId, report) => call('POST', `/matches/${encodeURIComponent(matchId)}/report`, report),
   };
 }
 

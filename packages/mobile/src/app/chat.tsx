@@ -1,4 +1,4 @@
-import type { ChatMessage, Match } from '@hated/api/contract';
+import type { ChatMessage, MatchSummary } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,7 +20,7 @@ const MAX_LENGTH = 2000;
 export default function Chat() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const { api } = useSession();
-  const [partner, setPartner] = useState<Match['partner'] | null>(null);
+  const [partner, setPartner] = useState<MatchSummary['partner'] | null>(null);
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -39,11 +39,10 @@ export default function Chat() {
     });
   }, []);
 
+  // Any match, from this round or an earlier one.
   useEffect(() => {
-    api.home().then(
-      (home) => {
-        if (home.result.status === 'matched' && home.result.match.matchId === matchId) setPartner(home.result.match.partner);
-      },
+    api.matches().then(
+      ({ matches }) => setPartner(matches.find((match) => match.matchId === matchId)?.partner ?? null),
       () => undefined,
     );
   }, [api, matchId]);
@@ -146,8 +145,16 @@ export default function Chat() {
           <Text style={styles.name} accessibilityRole="header">
             {partner === null ? name : `${partner.displayName}, ${partner.age}`}
           </Text>
-          <Text style={styles.subtitle}>{partner?.institution ? `Verified at ${partner.institution}` : 'Your match this round'}</Text>
+          <Text style={styles.subtitle}>{partner?.institution ? `Verified at ${partner.institution}` : 'Your match'}</Text>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Report ${name}`}
+          onPress={() => router.push({ pathname: '/report', params: { matchId, name } })}
+          style={styles.more}
+        >
+          <Feather name="flag" size={18} color={night.muted} />
+        </Pressable>
       </View>
 
       {messages === null ? (
@@ -207,6 +214,7 @@ const styles = StyleSheet.create({
   monogram: { width: 44, height: 44, borderRadius: 22, backgroundColor: night.blush, alignItems: 'center', justifyContent: 'center' },
   monogramText: { fontFamily: fonts.display, fontSize: 20, color: night.bg },
   headerText: { flex: 1, gap: 2 },
+  more: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   name: { fontFamily: fonts.displayBold, fontSize: 19, color: night.text },
   subtitle: { fontFamily: fonts.body, fontSize: 13, color: night.muted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },

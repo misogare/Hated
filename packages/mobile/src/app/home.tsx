@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { describeError } from '@/api/client';
+import { UnreadBadge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Notice, Wordmark } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
@@ -89,6 +90,20 @@ export default function Home() {
             </View>
           </View>
 
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={home.unreadTotal > 0 ? `Your matches, ${home.unreadTotal} unread` : 'Your matches'}
+            onPress={() => router.push('/matches')}
+            style={[styles.tile, styles.matchesTile]}
+          >
+            <View style={styles.matchesText}>
+              <Text style={styles.tileTitle}>Your matches</Text>
+              <Text style={styles.tileHint}>Every match and conversation</Text>
+            </View>
+            <UnreadBadge count={home.unreadTotal} />
+            <Feather name="chevron-right" size={20} color={night.muted} />
+          </Pressable>
+
           <View style={styles.tiles}>
             <Link href={{ pathname: '/onboarding/questions', params: { edit: '1' } }} asChild>
               <Pressable accessibilityRole="link" style={styles.tile}>
@@ -133,7 +148,11 @@ function Result({ home }: { home: HomeData }) {
       <Heading tone="night">{match.mutual ? `You and ${match.partner.displayName} both said hello` : 'Your match is here'}</Heading>
       {match.mutual ? (
         <>
-          <Button label="Open chat" tone="night" onPress={() => router.push({ pathname: '/chat', params: { matchId: match.matchId } })} />
+          <Button
+            label={match.unread > 0 ? `Open chat · ${match.unread} new` : 'Open chat'}
+            tone="night"
+            onPress={() => router.push({ pathname: '/chat', params: { matchId: match.matchId } })}
+          />
           <Button label="See your match" variant="text" tone="night" onPress={() => router.push('/reveal')} style={styles.inlineButton} />
         </>
       ) : (
@@ -208,7 +227,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   toggleLabel: { fontFamily: fonts.bodyMedium, fontSize: 15, color: night.text },
-  tiles: { marginTop: 14, flexDirection: 'row', gap: 12 },
+  matchesTile: { marginTop: 14, flex: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  matchesText: { flex: 1, gap: 2 },
+  tiles: { marginTop: 12, flexDirection: 'row', gap: 12 },
   tile: { flex: 1, minHeight: 64, padding: 16, borderRadius: 18, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, gap: 2 },
   tileTitle: { fontFamily: fonts.bodySemi, fontSize: 15, color: night.text },
   tileHint: { fontFamily: fonts.body, fontSize: 13, color: night.muted },

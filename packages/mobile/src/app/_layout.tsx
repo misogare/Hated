@@ -81,6 +81,8 @@ function Routes() {
         <Stack.Screen name="no-match" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="chat" />
+        <Stack.Screen name="matches" />
+        <Stack.Screen name="report" />
       </Stack.Protected>
     </Stack>
   );

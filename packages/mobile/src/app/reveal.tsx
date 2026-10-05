@@ -136,6 +136,12 @@ export default function Reveal() {
           <>
             <Button label="Say hello" tone="night" onPress={() => void act('hello')} busy={busy} />
             <Button label="Not for me" tone="night" variant="secondary" onPress={() => setStep('confirming-pass')} disabled={busy} />
+            <Button
+              label="Report"
+              tone="night"
+              variant="text"
+              onPress={() => router.push({ pathname: '/report', params: { matchId, name: partner.displayName } })}
+            />
           </>
         );
       case 'confirming-pass':
