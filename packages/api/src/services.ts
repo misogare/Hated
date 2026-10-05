@@ -1,6 +1,7 @@
 /** The production `ApiServices`: each one a call into `@hated/db`. */
 
 import {
+  createSession,
   getAccount,
   getActiveQuestionnaire,
   getAnswers,
@@ -8,6 +9,9 @@ import {
   getLatestResult,
   listMessages,
   passMatch,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
   saveAnswers,
   saveDesires,
   saveProfile,
@@ -26,6 +30,10 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
   return {
     startSignIn: (email) => startSignIn(prisma, { email }, { mailer }),
     verifyCode: (input) => verifyCode(prisma, input),
+    createSession: (userId) => createSession(prisma, userId),
+    resolveSession: (token) => resolveSession(prisma, token),
+    revokeSession: (token) => revokeSession(prisma, token),
+    revokeAllSessions: (userId) => revokeAllSessions(prisma, userId),
     getAccount: (userId) => getAccount(prisma, userId),
     saveProfile: (userId, input) => saveProfile(prisma, userId, input),
     setProfileActive: (userId, active) => setProfileActive(prisma, userId, active),

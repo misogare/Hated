@@ -8,7 +8,7 @@ typed result to a status code. Request and response shapes live in
 ## Running it
 
 ```bash
-cp packages/api/.env.example packages/api/.env   # then set AUTH_SECRET
+cp packages/api/.env.example packages/api/.env   # optional: port, round time
 npm run api                                       # from the repo root: build, then watch
 ```
 
@@ -18,7 +18,6 @@ Node 20.19+ (Prisma 7).
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `AUTH_SECRET` | (required) | HMAC key for session tokens, 32+ characters. Rotating it signs everyone out. |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | `0.0.0.0` lets a phone on the same Wi-Fi reach it. |
 | `ROUND_DAY` / `ROUND_TIME` / `ROUND_TIMEZONE` | `SUN` / `20:00` / `Australia/Melbourne` | When rounds close: wall-clock time in that zone, steady across daylight saving. |
 | `ROUND_AUTORUN` | `true` | Run each round automatically at its slot. `false` leaves it to `npm run round`. |
@@ -28,12 +27,14 @@ instead of emailed, which is handy for local development.
 
 ## Endpoints
 
-Everything except `/health` and `/auth/*` needs `Authorization: Bearer <token>`.
+Everything except `/health`, `/auth/code` and `/auth/verify` needs
+`Authorization: Bearer <token>`.
 
 | Route | Does | Notable responses |
 | --- | --- | --- |
 | `POST /auth/code` `{ email }` | Email a sign-in code; first use creates the account | 422 `unsupported-domain`, 429 `rate-limited` (+ `Retry-After`), 502 `delivery-failed` |
 | `POST /auth/verify` `{ verificationId, code }` | Exchange the code for a session token | 401 `invalid-code` with `attemptsRemaining`; 400 `expired` / `too-many-attempts` / … |
+| `POST /auth/sign-out` `{ everywhere? }` | End this device's session, or every session | |
 | `GET /me` | The account, profile and onboarding progress | |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |
@@ -60,6 +61,8 @@ log shows each run as `[rounds] round <slot>: matched N of M people`.
 
 ## Sessions
 
-Tokens are `<payload>.<signature>` with an HMAC-SHA256 signature and a 30-day
-expiry. They are stateless, so signing out on the server isn't possible yet.
-A sessions table would add that when it's needed.
+A session token is 32 random bytes, valid for 30 days. The database keeps only
+its SHA-256 hash, one row per signed-in device, and every request looks it up.
+`POST /auth/sign-out` ends this device's session; `{ "everywhere": true }`
+ends every session the person has, so a lost phone can be signed out from
+another device.

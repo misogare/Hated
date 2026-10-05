@@ -12,6 +12,7 @@ import type {
   DesireInput,
   ListMessagesResult,
   MatchActionResult,
+  NewSession,
   ProfileInput,
   QuestionnaireView,
   RoundResultView,
@@ -28,11 +29,15 @@ import { z } from 'zod';
 
 import type * as Api from './contract.js';
 import { nextRoundAt, type RoundSchedule } from './schedule.js';
-import { issueToken, verifyToken } from './tokens.js';
 
 export interface ApiServices {
   startSignIn(email: string): Promise<StartSignInResult>;
   verifyCode(input: { verificationId: string; code: string }): Promise<VerifyCodeResult>;
+  createSession(userId: string): Promise<NewSession>;
+  /** The user a session token signs in, or null. */
+  resolveSession(token: string): Promise<string | null>;
+  revokeSession(token: string): Promise<void>;
+  revokeAllSessions(userId: string): Promise<number>;
   getAccount(userId: string): Promise<AccountView | null>;
   saveProfile(userId: string, input: ProfileInput): Promise<SaveProfileResult>;
   setProfileActive(userId: string, active: boolean): Promise<boolean>;
@@ -50,14 +55,12 @@ export interface ApiServices {
 
 export interface ApiOptions {
   services: ApiServices;
-  /** HMAC key for session tokens; at least 32 characters. */
-  authSecret: string;
   schedule: RoundSchedule;
   /** Injectable clock, for tests. */
   now?: () => Date;
 }
 
-type Env = { Variables: { userId: string } };
+type Env = { Variables: { userId: string; token: string } };
 
 const SendCodeBody = z.object({ email: z.string().trim().min(3).max(254) });
 const VerifyCodeBody = z.object({
@@ -71,6 +74,7 @@ const ProfileBody = z.object({
   seeking: z.array(z.string().max(100)).max(20),
 });
 const ActiveBody = z.object({ active: z.boolean() });
+const SignOutBody = z.object({ everywhere: z.boolean().optional() });
 const Key = z.string().min(1).max(64);
 const AnswersBody = z.object({
   answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
@@ -82,7 +86,7 @@ const DesiresBody = z.object({
 });
 
 export function createApp(options: ApiOptions): Hono<Env> {
-  const { services, authSecret, schedule } = options;
+  const { services, schedule } = options;
   const now = options.now ?? (() => new Date());
   const app = new Hono<Env>();
 
@@ -98,9 +102,10 @@ export function createApp(options: ApiOptions): Hono<Env> {
   const requireUser = createMiddleware<Env>(async (c, next) => {
     const header = c.req.header('authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-    const userId = token.length > 0 ? verifyToken(token, authSecret, now()) : null;
+    const userId = token.length > 0 ? await services.resolveSession(token) : null;
     if (userId === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
     c.set('userId', userId);
+    c.set('token', token);
     await next();
   });
 
@@ -144,8 +149,19 @@ export function createApp(options: ApiOptions): Hono<Env> {
         ? c.json<Api.ApiError>({ error: 'invalid-code', attemptsRemaining: result.attemptsRemaining ?? 0 }, 401)
         : c.json<Api.ApiError>({ error: result.reason }, 400);
     }
-    const session = issueToken(result.userId, authSecret, now());
+    const session = await services.createSession(result.userId);
     return c.json<Api.SessionResponse>({ token: session.token, expiresAt: session.expiresAt.toISOString() });
+  });
+
+  app.post('/auth/sign-out', requireUser, async (c) => {
+    // An empty body means "just this device".
+    const raw = await c.req.text();
+    const parsed = SignOutBody.safeParse(raw.trim().length === 0 ? {} : safeJson(raw));
+    if (!parsed.success) return c.json<Api.ApiError>({ error: 'invalid-body' }, 400);
+
+    if (parsed.data.everywhere === true) await services.revokeAllSessions(c.get('userId'));
+    else await services.revokeSession(c.get('token'));
+    return c.body(null, 204);
   });
 
   // --- Account and profile ---------------------------------------------------
@@ -278,6 +294,14 @@ async function readBody<T>(
     return { ok: false, response: c.json<Api.ApiError>({ error: 'invalid-body', problems }, 400) };
   }
   return { ok: true, value: parsed.data };
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 function saved(c: Context, result: SaveResult): Response {

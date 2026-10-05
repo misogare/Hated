@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp, type ApiServices } from '../src/app.js';
 import { parseSchedule } from '../src/schedule.js';
-import { issueToken } from '../src/tokens.js';
 
-const SECRET = 'a-test-secret-that-is-at-least-32-chars';
+/** The one session the stub knows: it signs in user-1. */
+const TOKEN = 'session-token-user-1';
 const NOW = new Date('2026-10-05T12:00:00Z');
 
 const ACCOUNT: AccountView = {
@@ -33,14 +33,13 @@ function services(overrides: Partial<ApiServices> = {}): ApiServices {
 
 function app(overrides: Partial<ApiServices> = {}) {
   return createApp({
-    services: services(overrides),
-    authSecret: SECRET,
+    services: services({ resolveSession: async (token) => (token === TOKEN ? 'user-1' : null), ...overrides }),
     schedule: parseSchedule('SUN', '20:00', 'Australia/Melbourne'),
     now: () => NOW,
   });
 }
 
-const bearer = { Authorization: `Bearer ${issueToken('user-1', SECRET, NOW).token}` };
+const bearer = { Authorization: `Bearer ${TOKEN}` };
 
 function send(method: string, body?: unknown, headers: Record<string, string> = {}) {
   return {
@@ -87,17 +86,18 @@ describe('POST /auth/code', () => {
 
 describe('POST /auth/verify', () => {
   it('issues a session for the verified user', async () => {
+    let sessionFor: string | undefined;
     const res = await app({
       verifyCode: async () => ({ ok: true, verificationId: 'v1', userId: 'user-1', verifiedAt: NOW, accountEmailVerified: true }),
-      getAccount: async () => ACCOUNT,
+      createSession: async (userId) => {
+        sessionFor = userId;
+        return { token: 'fresh-token', expiresAt: new Date('2026-11-04T12:00:00Z') };
+      },
     }).request('/auth/verify', send('POST', { verificationId: 'v1', code: '123456' }));
 
     expect(res.status).toBe(200);
-    const { token } = (await res.json()) as { token: string };
-    const me = await app({ getAccount: async (userId) => ({ ...ACCOUNT, userId }) }).request('/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(await me.json()).toMatchObject({ userId: 'user-1' });
+    expect(sessionFor).toBe('user-1');
+    expect(await res.json()).toEqual({ token: 'fresh-token', expiresAt: '2026-11-04T12:00:00.000Z' });
   });
 
   it('reports a wrong code with the attempts left, and other failures by reason', async () => {
@@ -127,8 +127,26 @@ describe('authentication', () => {
     const a = app({ getAccount: async () => ACCOUNT });
     expect((await a.request('/me')).status).toBe(401);
     expect((await a.request('/me', { headers: { Authorization: 'Bearer nonsense' } })).status).toBe(401);
-    const otherSecret = issueToken('user-1', 'another-secret-that-is-also-32-chars-long', NOW).token;
-    expect((await a.request('/me', { headers: { Authorization: `Bearer ${otherSecret}` } })).status).toBe(401);
+    expect((await a.request('/me', { headers: { Authorization: TOKEN } })).status).toBe(401);
+  });
+
+  it('signs out this device, or every device', async () => {
+    const revoked: string[] = [];
+    const a = app({
+      revokeSession: async (token) => {
+        revoked.push(`device:${token}`);
+      },
+      revokeAllSessions: async (userId) => {
+        revoked.push(`all:${userId}`);
+        return 2;
+      },
+    });
+
+    expect((await a.request('/auth/sign-out', { method: 'POST', headers: bearer })).status).toBe(204);
+    expect((await a.request('/auth/sign-out', send('POST', { everywhere: true }, bearer))).status).toBe(204);
+    expect(revoked).toEqual([`device:${TOKEN}`, 'all:user-1']);
+    expect((await a.request('/auth/sign-out', send('POST', { everywhere: 'yes' }, bearer))).status).toBe(400);
+    expect((await a.request('/auth/sign-out', { method: 'POST' })).status).toBe(401);
   });
 
   it('treats a token for a deleted account as signed out', async () => {

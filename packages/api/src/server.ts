@@ -5,7 +5,7 @@
  *
  * Settings come from `packages/api/.env`, then `packages/db/.env`, which
  * already holds the database URL and the mail transport; the first file wins.
- * Required here: AUTH_SECRET. Optional: PORT (3000), HOST (0.0.0.0, so a
+ * Optional here: PORT (3000), HOST (0.0.0.0, so a
  * phone on the same network can reach it), ROUND_DAY / ROUND_TIME /
  * ROUND_TIMEZONE for when rounds close (SUN, 20:00, Australia/Melbourne), and
  * ROUND_AUTORUN=false to stop this server running rounds itself.
@@ -22,7 +22,6 @@ import { createApp } from './app.js';
 import { startRoundScheduler } from './round-scheduler.js';
 import { nextRoundAt, parseSchedule } from './schedule.js';
 import { createDbServices } from './services.js';
-import { MIN_SECRET_LENGTH } from './tokens.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 config({ path: [path.join(packageRoot, '.env'), path.join(packageRoot, '../db/.env')], quiet: true });
@@ -30,14 +29,6 @@ config({ path: [path.join(packageRoot, '.env'), path.join(packageRoot, '../db/.e
 function fail(message: string): never {
   console.error(message);
   process.exit(1);
-}
-
-const authSecret = process.env.AUTH_SECRET?.trim() ?? '';
-if (authSecret.length < MIN_SECRET_LENGTH) {
-  fail(
-    `AUTH_SECRET must be set to at least ${MIN_SECRET_LENGTH} characters (in packages/api/.env). Generate one with:\n` +
-      `  node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`,
-  );
 }
 
 let schedule;
@@ -56,7 +47,6 @@ try {
 const prisma = createPrismaClient();
 const app = createApp({
   services: createDbServices(prisma, createMailer(mailConfig)),
-  authSecret,
   schedule,
 });
 

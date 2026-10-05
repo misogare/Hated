@@ -38,6 +38,11 @@ export interface VerifyCodeRequest {
   code: string;
 }
 
+/** `POST /auth/sign-out`: this device, or with `everywhere`, every device. */
+export interface SignOutRequest {
+  everywhere?: boolean;
+}
+
 export interface SessionResponse {
   /** Send as `Authorization: Bearer <token>`. */
   token: string;
