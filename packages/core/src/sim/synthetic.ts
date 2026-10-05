@@ -34,6 +34,13 @@ export interface SyntheticOptions {
    * stable matching, so the fairness search has nothing to choose between.
    */
   personalizeWeights?: boolean;
+  /**
+   * How widely per-person ranking weights vary, as a fraction of the default
+   * spread. 0 makes everyone share the default weights (no personal weighting);
+   * 1 is the full spread. More spread means more independent rankings, which is
+   * what gives the stable-matching lattice its size.
+   */
+  weightSpread?: number;
 }
 
 const DEFAULT_GENDER_MIX: Record<GenderId, number> = {
@@ -89,6 +96,7 @@ export function generatePopulation(options: SyntheticOptions): Profile[] {
   const traitCount = Math.max(1, options.traitCount ?? 6);
   const blockedRate = options.blockedRate ?? 0.02;
   const personalizeWeights = options.personalizeWeights ?? true;
+  const weightSpread = Math.max(0, options.weightSpread ?? 1);
 
   const traitNames = Array.from({ length: traitCount }, (_, index) => `t${index}`);
 
@@ -121,8 +129,8 @@ export function generatePopulation(options: SyntheticOptions): Profile[] {
     // mirror images and collapses the lattice.
     const weights = personalizeWeights
       ? {
-          similarityWeight: 0.15 + rng.next() * 0.3,
-          desireWeight: 0.35 + rng.next() * 0.3,
+          similarityWeight: 0.3 + (rng.next() - 0.5) * 0.3 * weightSpread,
+          desireWeight: 0.5 + (rng.next() - 0.5) * 0.3 * weightSpread,
           reciprocityWeight: 0,
         }
       : undefined;
