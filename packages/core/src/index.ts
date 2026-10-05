@@ -58,12 +58,14 @@ export {
 } from './gs/rotations.js';
 
 export {
+  evaluateMatching,
   findFairMatching,
   objectiveValue,
   type FairMatcherInput,
   type FairMatcherResult,
   type FairObjective,
   type MatchingEvaluation,
+  type MatchingEvaluatorInput,
 } from './gs/fair.js';
 
 export { computeSideMetrics, type RoundMetrics, type SideMetrics } from './metrics/index.js';

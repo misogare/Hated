@@ -97,6 +97,14 @@ function normalizedCost(rank: number | undefined, listLength: number): number {
   return clamp01(rank / (listLength - 1));
 }
 
+/** Everything needed to score a matching, without committing to an objective. */
+export interface MatchingEvaluatorInput {
+  proposers: readonly string[];
+  receivers: readonly string[];
+  proposerPrefs: ReadonlyMap<string, readonly string[]>;
+  receiverPrefs: ReadonlyMap<string, readonly string[]>;
+}
+
 interface Evaluator {
   evaluate(matching: ReadonlyMap<string, string>): MatchingEvaluation;
 }
@@ -105,7 +113,7 @@ interface Evaluator {
  * Precompute rank lookups once; every objective is then a cheap pass over the
  * matching. Called a lot during the search, so this avoids O(k) indexOf scans.
  */
-function makeEvaluator(input: FairMatcherInput): Evaluator {
+function makeEvaluator(input: MatchingEvaluatorInput): Evaluator {
   const proposerRanks = new Map<string, Map<string, number>>();
   for (const [id, list] of input.proposerPrefs) proposerRanks.set(id, rankMap(list));
   const receiverRanks = new Map<string, Map<string, number>>();
@@ -157,6 +165,18 @@ function makeEvaluator(input: FairMatcherInput): Evaluator {
   };
 
   return { evaluate };
+}
+
+/**
+ * Score one matching under the engine's normalised-rank metrics. Exposed so
+ * callers can evaluate arbitrary stable matchings - for example to measure how
+ * much an objective varies across a sample of the lattice.
+ */
+export function evaluateMatching(
+  input: MatchingEvaluatorInput,
+  matching: ReadonlyMap<string, string>,
+): MatchingEvaluation {
+  return makeEvaluator(input).evaluate(matching);
 }
 
 export function objectiveValue(objective: FairObjective, evaluation: MatchingEvaluation): number {

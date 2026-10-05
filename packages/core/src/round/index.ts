@@ -23,6 +23,13 @@ import { computeSideMetrics, type RoundMetrics, type SideMetrics } from '../metr
 export interface MatchRoundOptions {
   firstDate?: Partial<FirstDateConfig>;
   partition?: PartitionOptions;
+  /**
+   * A partition computed earlier for the same population. The split depends only
+   * on gender/orientation/blocks, never on scores, so callers that run many
+   * rounds over one population (parameter sweeps) can reuse it instead of
+   * paying the O(n^2) partition cost per round.
+   */
+  partitionResult?: PartitionResult;
   /** Which stable matching to ship. Defaults to min-regret, the fairest worst case. */
   objective?: FairObjective;
   /** Exact-optimum threshold, in matched pairs. */
@@ -51,6 +58,10 @@ export interface RoundResult {
   metrics: RoundMetrics;
   config: FirstDateConfig;
   objective: FairObjective;
+  /** Side A's ranked lists, already filtered to side B. */
+  proposerPrefs: Map<string, string[]>;
+  /** Side B's ranked lists, already filtered to side A. */
+  receiverPrefs: Map<string, string[]>;
 }
 
 export function runMatchRound(
@@ -60,7 +71,7 @@ export function runMatchRound(
   const config: FirstDateConfig = { ...DEFAULT_FIRSTDATE_CONFIG, ...options.firstDate };
   const objective: FairObjective = options.objective ?? 'min-regret';
 
-  const partition = partitionSides(profiles, options.partition);
+  const partition = options.partitionResult ?? partitionSides(profiles, options.partition);
 
   const allLists = buildPreferenceLists(profiles, config);
 
@@ -133,5 +144,7 @@ export function runMatchRound(
     metrics,
     config,
     objective,
+    proposerPrefs,
+    receiverPrefs,
   };
 }
