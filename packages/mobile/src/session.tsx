@@ -8,6 +8,7 @@ import type { Account } from '@hated/api/contract';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { ApiError, apiBaseUrl, createApiClient, type ApiClient } from '@/api/client';
+import { currentPushToken, forgetPushToken } from '@/notifications';
 import { clearToken, readToken, writeToken } from '@/storage';
 
 type Status =
@@ -23,7 +24,10 @@ interface Session {
   account: Account | null;
   api: ApiClient;
   signIn(token: string): Promise<void>;
-  /** End the session on the server (every device with `everywhere`), then forget it here. */
+  /**
+   * End the session on the server (every device with `everywhere`) and stop
+   * this device's notifications, then forget it here.
+   */
   signOut(options?: { everywhere?: boolean }): Promise<void>;
   /** Reload the account, e.g. after editing the profile. */
   refresh(): Promise<Account | null>;
@@ -39,6 +43,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   /** Drop the session on this device only. */
   const forget = useCallback(async () => {
     tokenRef.current = null;
+    forgetPushToken();
     setAccount(null);
     setStatus('signed-out');
     await clearToken();
@@ -59,7 +64,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(
     async (options: { everywhere?: boolean } = {}) => {
       try {
-        await api.signOut(options.everywhere ?? false);
+        const pushToken = currentPushToken();
+        await api.signOut({ everywhere: options.everywhere ?? false, ...(pushToken === null ? {} : { pushToken }) });
       } catch {
         // Offline or already ended: signing out on this device must still work.
       }

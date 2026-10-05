@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { BackButton, Notice } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
+import { useOpenChat } from '@/notifications';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
@@ -27,6 +28,7 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState<string | null>(null);
   const newest = useRef<string | undefined>(undefined);
+  useOpenChat(matchId);
 
   /** Add messages not seen yet, keeping order and the newest id for the next poll. */
   const merge = useCallback((incoming: ChatMessage[]) => {

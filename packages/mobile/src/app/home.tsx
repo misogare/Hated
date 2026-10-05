@@ -11,6 +11,7 @@ import { Notice, Wordmark } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow, Heading } from '@/components/Text';
 import { roundTime } from '@/copy';
+import { registerForPush, useNotificationRouting } from '@/notifications';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
@@ -36,6 +37,15 @@ export default function Home() {
       void load();
     }, [load]),
   );
+
+  // Home is where everyone who finished onboarding lands, so ask about
+  // notifications here (the system asks once) and open what a tapped one is about.
+  useEffect(() => {
+    void registerForPush(api).then((setup) => {
+      if (__DEV__ && !setup.ok && setup.reason !== 'unsupported') console.info(`[push] not set up: ${setup.reason}${setup.detail ? ` (${setup.detail})` : ''}`);
+    });
+  }, [api]);
+  useNotificationRouting(load);
 
   async function toggle(active: boolean) {
     if (home === null) return;
