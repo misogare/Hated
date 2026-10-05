@@ -86,4 +86,21 @@ export {
   type SyntheticOptions,
 } from './sim/synthetic.js';
 
+export {
+  latticeMetrics,
+  paretoFrontier,
+  runPopulationSweep,
+  runSweep,
+  sampleLattice,
+  summarizeByObjective,
+  summarizeLatticeByPopulation,
+  type LatticeMetrics,
+  type LatticeSample,
+  type LatticeSummary,
+  type ObjectiveSummary,
+  type PopulationSweepGrid,
+  type SweepCell,
+  type SweepOptions,
+} from './sim/sweep.js';
+
 export { createRng, gaussian, type Rng } from './util/random.js';
