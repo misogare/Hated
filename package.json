@@ -22,6 +22,6 @@
     "api": "npm run dev -w @hated/api"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   }
 }
