@@ -19,10 +19,13 @@ const LEVELS = [
   { label: 'Important', weight: 1 },
 ] as const;
 
+/** A trait with nothing saved yet: "Nice to have", aimed at the middle. */
+const DEFAULT_DESIRE: Desire = { target: 0.5, weight: 0.5 };
+
 /**
- * Step 3: what they hope for on each trait. Everything starts at "Don't mind",
- * so nothing is assumed on someone's behalf: a preference only counts once
- * they set it.
+ * Step 3: what they hope for on each trait. As in the prototype, a trait not
+ * saved yet starts at "Nice to have", aimed at the middle of the scale;
+ * "Don't mind" leaves it out of matching entirely.
  */
 export default function Hopes() {
   const { edit } = useLocalSearchParams<{ edit?: string }>();
@@ -46,7 +49,7 @@ export default function Hopes() {
   }, [api]);
 
   function desireFor(key: string): Desire {
-    return desires[key] ?? { target: 0.5, weight: 0 };
+    return desires[key] ?? DEFAULT_DESIRE;
   }
 
   async function save() {
@@ -78,7 +81,7 @@ export default function Hopes() {
         )}
       </View>
       <Title style={styles.title}>What are you hoping for?</Title>
-      <Body style={styles.lede}>Say how much each one matters. Anything you leave at "Don't mind" is left out entirely.</Body>
+      <Body style={styles.lede}>Say how much each one matters. Anything you mark "Don't mind" is left out entirely.</Body>
 
       {traits === null ? (
         <View style={styles.loading}>{error === null ? <ActivityIndicator color={day.accent} /> : null}</View>

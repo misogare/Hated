@@ -47,8 +47,9 @@ Onboarding resumes where it was left: `start` reads the account's onboarding
 progress. The questionnaire saves each answer as it goes, and the profile,
 answers and "what matters" screens double as editors from home (`?edit=1`).
 
-"What matters" starts every trait at "Don't mind", so no preference is ever
-assumed on someone's behalf; a trait only counts once they set it.
+"What matters" starts each trait not yet saved at "Nice to have", aimed at the
+middle of the scale, as in the prototype. "Don't mind" leaves a trait out of
+matching entirely.
 
 ## Checks
 
