@@ -91,6 +91,17 @@ export interface NotificationPrefs {
 /** Kinds left out stay as they are. */
 export type NotificationsRequest = Partial<NotificationPrefs>;
 
+/**
+ * Everything HateD holds about the person, as one document (`GET /me/export`).
+ * The app saves it as it is; its sections are described in packages/db's README.
+ */
+export interface DataExport {
+  format: 'hated-export';
+  version: number;
+  exportedAt: string;
+  about: string;
+}
+
 export interface ProfileRequest {
   displayName: string;
   /** `YYYY-MM-DD`. */

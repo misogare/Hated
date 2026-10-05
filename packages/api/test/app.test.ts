@@ -559,3 +559,48 @@ describe('privacy', () => {
     expect(deleted).toEqual(['user-1']);
   });
 });
+
+describe('data export', () => {
+  const EXPORT = {
+    format: 'hated-export' as const,
+    version: 1 as const,
+    exportedAt: NOW.toISOString(),
+    about: 'Everything HateD holds about you.',
+    account: { email: 'sam@vu.edu.au', emailVerified: true, createdAt: NOW.toISOString(), notifications: { messages: true, hellos: true, rounds: true } },
+    emailVerifications: [],
+    profile: null,
+    answers: [],
+    traits: {},
+    hopes: {},
+    rounds: [],
+    matches: [],
+    reportsYouMade: [],
+    signIns: [],
+    notificationDevices: [],
+  };
+
+  it("sends the person's data as a file that is never cached", async () => {
+    const asked: string[] = [];
+    const res = await app({
+      exportAccount: async (userId) => {
+        asked.push(userId);
+        return EXPORT;
+      },
+    }).request('/me/export', send('GET', undefined, bearer));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('content-disposition')).toBe(`attachment; filename="hated-data-${NOW.toISOString().slice(0, 10)}.json"`);
+    expect(await res.json()).toEqual(EXPORT);
+    expect(asked).toEqual(['user-1']);
+  });
+
+  it('allows five exports an hour per person', async () => {
+    const a = app({ exportAccount: async () => EXPORT });
+    for (let i = 0; i < 5; i++) expect((await a.request('/me/export', send('GET', undefined, bearer))).status).toBe(200);
+
+    const sixth = await a.request('/me/export', send('GET', undefined, bearer));
+    expect(sixth.status).toBe(429);
+    expect(Number(sixth.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+});

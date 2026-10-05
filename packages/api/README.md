@@ -40,6 +40,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `PUT /me/push-token` `{ token, platform }` | This device can receive push notifications | 422 `invalid` |
 | `GET /me` | The account, profile, onboarding progress and notification settings | |
 | `DELETE /me` | Delete the account and everything in it, for good (see [Deleting an account](#deleting-an-account)) | 204 |
+| `GET /me/export` | Everything HateD holds about the person, as one JSON file (see `packages/db/README.md`); never cached | 429 `rate-limited` after 5 an hour |
 | `PUT /me/notifications` `{ messages?, hellos?, rounds? }` | Turn each kind of push notification on or off, on every device; kinds left out stay as they are | 400 for anything else |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |

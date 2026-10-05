@@ -7,6 +7,7 @@
  */
 
 import type {
+  AccountExport,
   AccountView,
   AnswerValue,
   DesireInput,
@@ -66,6 +67,8 @@ export interface ApiServices {
   setNotificationPrefs(userId: string, changes: Partial<NotificationPrefs>): Promise<NotificationPrefs | null>;
   /** Erase the account and everything in it. False if there was no such account. */
   deleteAccount(userId: string): Promise<boolean>;
+  /** Everything about the account, or null if there is no such account. */
+  exportAccount(userId: string): Promise<AccountExport | null>;
 }
 
 export interface ApiOptions {
@@ -102,6 +105,8 @@ const VERIFY_CODE_LIMITS = [
   { limit: 20, windowMs: 60_000 },
   { limit: 100, windowMs: 60 * 60_000 },
 ];
+/** Per person: an export reads the whole account, and nobody needs one a minute. */
+const EXPORT_LIMITS = [{ limit: 5, windowMs: 60 * 60_000 }];
 
 type Env = { Variables: { userId: string; token: string } };
 
@@ -140,11 +145,12 @@ export function createApp(options: ApiOptions): Hono<Env> {
   const clock = () => now().getTime();
   const sendCodeLimiter = createRateLimiter(SEND_CODE_LIMITS, clock);
   const verifyCodeLimiter = createRateLimiter(VERIFY_CODE_LIMITS, clock);
+  const exportLimiter = createRateLimiter(EXPORT_LIMITS, clock);
   const app = new Hono<Env>();
 
-  /** 429 with Retry-After when this caller is over the limit, else null. */
-  function limited(c: Context, limiter: RateLimiter): Response | null {
-    const result = limiter.check(clientIp(c));
+  /** 429 with Retry-After when this caller (by IP, or by `key`) is over the limit, else null. */
+  function limited(c: Context, limiter: RateLimiter, key: string = clientIp(c)): Response | null {
+    const result = limiter.check(key);
     if (result.ok) return null;
     const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
     c.header('Retry-After', String(retryAfterSeconds));
@@ -265,6 +271,20 @@ export function createApp(options: ApiOptions): Hono<Env> {
     const account = await services.getAccount(userId);
     if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
     return c.json<Api.Account>(account);
+  });
+
+  // Access and portability: a copy of everything about the person, built fresh
+  // each time. Personal data, so never cached along the way.
+  app.get('/me/export', requireUser, async (c) => {
+    const userId = c.get('userId');
+    const tooMany = limited(c, exportLimiter, userId);
+    if (tooMany !== null) return tooMany;
+
+    const data = await services.exportAccount(userId);
+    if (data === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    c.header('Cache-Control', 'no-store');
+    c.header('Content-Disposition', `attachment; filename="hated-data-${data.exportedAt.slice(0, 10)}.json"`);
+    return c.json<Api.DataExport>(data);
   });
 
   app.put('/me/notifications', requireUser, async (c) => {

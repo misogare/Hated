@@ -3,6 +3,7 @@
 import {
   createSession,
   deleteAccount,
+  exportAccount,
   getAccount,
   getActiveQuestionnaire,
   getAnswers,
@@ -61,5 +62,6 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     unregisterAllPushTokens: (userId) => unregisterAllPushTokens(prisma, userId),
     setNotificationPrefs: (userId, changes) => setNotificationPrefs(prisma, userId, changes),
     deleteAccount: (userId) => deleteAccount(prisma, userId),
+    exportAccount: (userId) => exportAccount(prisma, userId),
   };
 }
