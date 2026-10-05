@@ -5,7 +5,7 @@
  */
 
 import type { Account } from '@hated/api/contract';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { ApiError, apiBaseUrl, createApiClient, type ApiClient } from '@/api/client';
 import { currentPushToken, forgetPushToken } from '@/notifications';
@@ -35,30 +35,41 @@ interface Session {
 
 const SessionContext = createContext<Session | null>(null);
 
+/** Where the token lives in memory; the API client reads it when it makes a call. */
+function tokenHolder() {
+  let token: string | null = null;
+  return {
+    get: () => token,
+    set: (next: string | null) => {
+      token = next;
+    },
+  };
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const tokenRef = useRef<string | null>(null);
+  const [token] = useState(tokenHolder);
   const [status, setStatus] = useState<Status>('loading');
   const [account, setAccount] = useState<Account | null>(null);
 
   /** Drop the session on this device only. */
   const forget = useCallback(async () => {
-    tokenRef.current = null;
+    token.set(null);
     forgetPushToken();
     setAccount(null);
     setStatus('signed-out');
     await clearToken();
-  }, []);
+  }, [token]);
 
   const api = useMemo(
     () =>
       createApiClient({
         baseUrl: apiBaseUrl(),
-        token: () => tokenRef.current,
+        token: token.get,
         // The server already says the session is gone, so only forget it here
         // (asking the server to sign out again would just be another 401).
         onUnauthorized: () => void forget(),
       }),
-    [forget],
+    [token, forget],
   );
 
   const signOut = useCallback(
@@ -75,7 +86,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const refresh = useCallback(async () => {
-    if (tokenRef.current === null) return null;
+    if (token.get() === null) return null;
     try {
       const next = await api.me();
       setAccount(next);
@@ -86,24 +97,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!(error instanceof ApiError && error.status === 401)) setStatus('offline');
       return null;
     }
-  }, [api]);
+  }, [token, api]);
 
   const signIn = useCallback(
-    async (token: string) => {
-      tokenRef.current = token;
-      await writeToken(token);
+    async (next: string) => {
+      token.set(next);
+      await writeToken(next);
       await refresh();
     },
-    [refresh],
+    [token, refresh],
   );
 
   useEffect(() => {
     void (async () => {
-      tokenRef.current = await readToken();
-      if (tokenRef.current === null) setStatus('signed-out');
+      token.set(await readToken());
+      if (token.get() === null) setStatus('signed-out');
       else await refresh();
     })();
-  }, [refresh]);
+  }, [token, refresh]);
 
   const value = useMemo(
     () => ({ status, account, api, signIn, signOut, refresh }),

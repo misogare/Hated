@@ -10,7 +10,7 @@ import { Eyebrow, Title } from '@/components/Text';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
-const EDITORS: Array<{ label: string; hint: string; href: Href }> = [
+const EDITORS: { label: string; hint: string; href: Href }[] = [
   { label: 'About you', hint: 'Name, birthday, who you are open to', href: { pathname: '/onboarding/about', params: { edit: '1' } } },
   { label: 'Your answers', hint: 'The questions about you', href: { pathname: '/onboarding/questions', params: { edit: '1' } } },
   { label: 'What matters', hint: 'What you hope for in someone', href: { pathname: '/onboarding/hopes', params: { edit: '1' } } },

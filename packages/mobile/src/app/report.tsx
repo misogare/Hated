@@ -11,7 +11,7 @@ import { Body, Title } from '@/components/Text';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
-const REASONS: Array<{ id: ReportReason; label: string }> = [
+const REASONS: { id: ReportReason; label: string }[] = [
   { id: 'harassment', label: 'Harassment or threats' },
   { id: 'inappropriate', label: 'Inappropriate messages or content' },
   { id: 'spam', label: 'Spam or a scam' },
