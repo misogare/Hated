@@ -90,6 +90,44 @@ re-runs, instead of shelling out to each workspace in turn.
 - `InstitutionVerification` stores only a hash (plus optional salt) of the
   emailed one-time code, never the code itself.
 
+## Mapping to the engine
+
+`toEngineProfile` flattens a stored profile (plus its relations) into the
+`@hated/core` `Profile` the matcher consumes:
+
+```ts
+import { toEngineProfiles, PROFILE_INCLUDE } from '@hated/db';
+
+const rows = await prisma.profile.findMany({
+  where: { isActive: true },
+  include: PROFILE_INCLUDE,
+});
+const population = toEngineProfiles(rows);
+```
+
+For the common case, `loadEngineProfiles(prisma)` runs that query for the active
+population (ordered by id, so rounds are reproducible) and maps it in one call:
+
+```ts
+import { loadEngineProfiles } from '@hated/db';
+
+const population = await loadEngineProfiles(prisma);
+// options: { ids } to restrict to a cohort, { includeInactive: true } to include paused profiles
+```
+
+Contract details worth knowing:
+
+- **Blocks are symmetric.** The mapper unions blocks this profile made with the
+  ones aimed at it, because the engine only asks whether either side blocks the
+  other. Store a block once; both people become mutually unacceptable.
+- **Weights are all-or-nothing.** `weights` is emitted only when all three
+  weight columns are non-null; otherwise the round's `FirstDateConfig` defaults
+  apply (what `resolveWeights` expects).
+- **Empty `seeking` stays empty**, which the engine reads as "open to everyone".
+
+The mapper's import from `@hated/core` is type-only, so it adds no runtime
+dependency on the engine.
+
 ## Using the client
 
 Prisma 7 requires a driver adapter, so construct clients through the helper:

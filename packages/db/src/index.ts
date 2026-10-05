@@ -13,6 +13,19 @@ import { PrismaClient } from './generated/prisma/client.js';
 
 export * from './generated/prisma/client.js';
 
+export {
+  PROFILE_INCLUDE,
+  toEngineProfile,
+  toEngineProfiles,
+  type ProfileRow,
+  type ProfileWithRelations,
+} from './mapper.js';
+
+export {
+  loadEngineProfiles,
+  type LoadPopulationOptions,
+} from './population.js';
+
 export interface CreatePrismaClientOptions {
   /** Overrides `process.env.DATABASE_URL`. */
   connectionString?: string;
