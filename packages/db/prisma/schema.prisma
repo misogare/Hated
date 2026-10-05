@@ -303,6 +303,9 @@ model Match {
   /// Each side's rank of the other within their preference list (1 = first).
   rankA      Int?
   rankB      Int?
+  /// When each side said hello. A conversation opens once both are set.
+  helloAAt   DateTime?
+  helloBAt   DateTime?
   createdAt  DateTime @default(now())
 
   round    MatchRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
