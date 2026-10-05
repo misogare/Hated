@@ -235,6 +235,71 @@ smallest side gap and the one with the lowest mean cost. It reuses the engine's
 `runSweep` with a single `(topK, minScore)` cell, so the numbers match
 `@hated/core`'s.
 
+## Institution verification
+
+`requestVerificationCode` (`src/verification.ts`) implements the `.edu` / `.gov`
+one-time-code flow end to end: it checks the domain against the institution
+allowlist, stores a code, and emails it. The code is never stored in the clear:
+the service keeps a scrypt hash plus a per-request salt.
+
+Domain matching is subdomain-aware: an address is accepted when its domain is
+registered, **or is a subdomain of a registered domain**. Registering `vu.edu.au`
+thus admits `live.vu.edu.au` (student portals commonly live on a subdomain).
+Academic domains are regional — `.edu` (US), `.edu.au` (Australia), `.ac.uk`
+(UK) — so register the institution's apex domain rather than enumerating
+subdomains. The boundary is a dot label, so `notvu.edu.au` never matches
+`vu.edu.au`.
+
+```ts
+import {
+  createPrismaClient,
+  createResendMailer,
+  requestVerificationCode,
+  verifyCode,
+} from '@hated/db';
+
+const prisma = createPrismaClient();
+const mailer = createResendMailer({ apiKey: process.env.RESEND_API_KEY!, from: 'HateD <codes@x.com>' });
+
+const sent = await requestVerificationCode(
+  prisma,
+  { userId, email },
+  { mailer, appName: 'HateD' },
+);
+if (!sent.ok) return; // 'unsupported-domain' | 'delivery-failed'
+
+// ...later, when the user submits the code:
+const result = await verifyCode(prisma, { verificationId: sent.verificationId, code: submitted });
+```
+
+### Email delivery
+
+Email goes through a one-method `Mailer` interface (`src/mailer.ts`), so the flow
+isn't coupled to a provider:
+
+- `createResendMailer({ apiKey, from })` posts to [Resend](https://resend.com)'s
+  HTTP API using the platform `fetch` — no email SDK dependency.
+- `createConsoleMailer()` prints the message (and the code) for local
+  development.
+- `renderVerificationEmail(...)` builds the subject/text/html on its own, so you
+  can snapshot it or drop in any other transport.
+
+If the mailer throws, the pending request is expired before the error surfaces,
+so a code the recipient never received cannot be redeemed.
+
+Guarantees (both `startVerification` and `requestVerificationCode`):
+
+- Code is stored only as a salted scrypt hash; comparison is constant-time.
+- Single use (`consumedAt`), expires after `ttlMs` (default 10 minutes).
+- Locks out after `maxAttempts` wrong guesses (default 5); each failure counts.
+- Issuing a new code expires any earlier pending request for the same address
+  and type, so only the newest code can be redeemed.
+
+The low-level `startVerification` remains available when the caller wants to do
+its own delivery. All of these take an optional `VerificationServiceOptions`
+(injectable `now` clock, `ttlMs`, `maxAttempts`, `codeLength`, `scryptCost`) and
+return typed results rather than throwing.
+
 ## Using the client
 
 Prisma 7 requires a driver adapter, so construct clients through the helper:

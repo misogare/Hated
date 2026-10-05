@@ -40,6 +40,36 @@ export {
   type StoredMetrics,
 } from './round-info.js';
 
+export {
+  normalizeEmail,
+  requestVerificationCode,
+  startVerification,
+  verifyCode,
+  type IssuedVerification,
+  type RequestVerificationCodeInput,
+  type RequestVerificationCodeOptions,
+  type RequestVerificationCodeResult,
+  type StartVerificationInput,
+  type StartVerificationResult,
+  type VerificationServiceOptions,
+  type VerifyCodeInput,
+  type VerifyCodeResult,
+  type VerifyFailureReason,
+} from './verification.js';
+
+export {
+  createConsoleMailer,
+  createResendMailer,
+  renderVerificationEmail,
+  type ConsoleMailerOptions,
+  type EmailMessage,
+  type MailFetch,
+  type MailFetchResponse,
+  type Mailer,
+  type ResendMailerOptions,
+  type VerificationEmailInput,
+} from './mailer.js';
+
 export interface CreatePrismaClientOptions {
   /** Overrides `process.env.DATABASE_URL`. */
   connectionString?: string;
