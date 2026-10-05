@@ -15,7 +15,9 @@
     "db:migrate": "npm run migrate -w @hated/db --",
     "round": "npm run round -w @hated/db --",
     "round:inspect": "npm run round:inspect -w @hated/db --",
-    "compare": "npm run compare -w @hated/db --"
+    "compare": "npm run compare -w @hated/db --",
+    "send-code": "npm run send-code -w @hated/db --",
+    "verify-code": "npm run verify-code -w @hated/db --"
   },
   "engines": {
     "node": ">=20"

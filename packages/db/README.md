@@ -35,7 +35,8 @@ only the storage shape.
 Other scripts: `generate` (regenerate the client), `push` (schema → DB without a
 migration), `studio`, `migrate:deploy`, `round` (run one match round — see
 below), `round:inspect` (read one back), `compare` (fairness objectives
-side by side), `typecheck`.
+side by side), `send-code` (email a verification code), `verify-code`
+(redeem one), `typecheck`.
 
 ### Seed data
 
@@ -286,6 +287,45 @@ isn't coupled to a provider:
 
 If the mailer throws, the pending request is expired before the error surfaces,
 so a code the recipient never received cannot be redeemed.
+
+Environment variables (see `.env.example`):
+
+- `RESEND_API_KEY` — Resend API key. Without it the `send-code` CLI falls back to
+  the console mailer.
+- `MAIL_FROM` — verified sender, e.g. `HateD <codes@yourdomain.com>`.
+
+### The `send-code` helper CLI
+
+```bash
+# prints the code (console mailer) — no provider key needed
+npm run send-code -- --email student@mit.edu --print
+
+# real send via Resend
+npm run send-code -- --email student@mit.edu
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--email <addr>` | recipient, must be an allowlisted `.edu`/`.gov` (required) |
+| `--user <id>` | account id; default: resolved from `User` by email |
+| `--print` | use the console mailer instead of Resend |
+| `--from <addr>` / `--app <name>` | sender override / product name in the copy |
+| `--ttl <minutes>` | code lifetime (default 10) |
+
+### The `verify-code` helper CLI
+
+Redeems a code against a stored verification — the counterpart to `send-code`.
+Pass the verification id it printed (positionally or via `--id`) and the code the
+user received:
+
+```bash
+npm run verify-code -- --id <verificationId> --code 123456
+npm run verify-code -- <verificationId> --code 123456 --json
+```
+
+On success it prints `Code accepted`; on failure it prints the reason and exits
+non-zero — `unknown`, `expired`, `too-many-attempts`, `already-verified`, or
+`invalid-code` with the attempts remaining.
 
 Guarantees (both `startVerification` and `requestVerificationCode`):
 
