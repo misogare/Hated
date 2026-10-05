@@ -18,7 +18,8 @@
     "compare": "npm run compare -w @hated/db --",
     "send-code": "npm run send-code -w @hated/db --",
     "verify-code": "npm run verify-code -w @hated/db --",
-    "mail:check": "npm run mail:check -w @hated/db --"
+    "mail:check": "npm run mail:check -w @hated/db --",
+    "api": "npm run dev -w @hated/api"
   },
   "engines": {
     "node": ">=20"

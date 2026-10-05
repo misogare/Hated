@@ -1,0 +1,263 @@
+/**
+ * The HTTP API the app talks to. Routes are thin: validate the body, call one
+ * service, map its typed result to a status code and a `contract.ts` shape.
+ *
+ * Services are injected (`ApiServices`), so tests drive every route with plain
+ * stubs and `server.ts` wires the real `@hated/db` functions.
+ */
+
+import type {
+  AccountView,
+  AnswerValue,
+  DesireInput,
+  MatchActionResult,
+  ProfileInput,
+  QuestionnaireView,
+  RoundResultView,
+  SaveProfileResult,
+  SaveResult,
+  StartSignInResult,
+  VerifyCodeResult,
+} from '@hated/db';
+import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
+import { createMiddleware } from 'hono/factory';
+import { z } from 'zod';
+
+import type * as Api from './contract.js';
+import { nextRoundAt, type RoundSchedule } from './schedule.js';
+import { issueToken, verifyToken } from './tokens.js';
+
+export interface ApiServices {
+  startSignIn(email: string): Promise<StartSignInResult>;
+  verifyCode(input: { verificationId: string; code: string }): Promise<VerifyCodeResult>;
+  getAccount(userId: string): Promise<AccountView | null>;
+  saveProfile(userId: string, input: ProfileInput): Promise<SaveProfileResult>;
+  setProfileActive(userId: string, active: boolean): Promise<boolean>;
+  getQuestionnaire(): Promise<QuestionnaireView | null>;
+  getAnswers(userId: string): Promise<Record<string, AnswerValue>>;
+  saveAnswers(userId: string, answers: Record<string, AnswerValue>): Promise<SaveResult>;
+  getDesires(userId: string): Promise<Record<string, DesireInput>>;
+  saveDesires(userId: string, desires: Record<string, DesireInput>): Promise<SaveResult>;
+  getLatestResult(userId: string): Promise<RoundResultView>;
+  sayHello(userId: string, matchId: string): Promise<MatchActionResult>;
+  passMatch(userId: string, matchId: string): Promise<MatchActionResult>;
+}
+
+export interface ApiOptions {
+  services: ApiServices;
+  /** HMAC key for session tokens; at least 32 characters. */
+  authSecret: string;
+  schedule: RoundSchedule;
+  /** Injectable clock, for tests. */
+  now?: () => Date;
+}
+
+type Env = { Variables: { userId: string } };
+
+const SendCodeBody = z.object({ email: z.string().trim().min(3).max(254) });
+const VerifyCodeBody = z.object({
+  verificationId: z.string().min(1).max(64),
+  code: z.string().trim().regex(/^\d{4,10}$/),
+});
+const ProfileBody = z.object({
+  displayName: z.string().max(100),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  gender: z.string().max(100),
+  seeking: z.array(z.string().max(100)).max(20),
+});
+const ActiveBody = z.object({ active: z.boolean() });
+const Key = z.string().min(1).max(64);
+const AnswersBody = z.object({
+  answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
+});
+const DesiresBody = z.object({
+  desires: z.record(Key, z.object({ target: z.number(), weight: z.number() })),
+});
+
+export function createApp(options: ApiOptions): Hono<Env> {
+  const { services, authSecret, schedule } = options;
+  const now = options.now ?? (() => new Date());
+  const app = new Hono<Env>();
+
+  // Sessions are bearer tokens, never cookies, so any origin may call (Expo web in dev).
+  app.use('*', cors());
+
+  app.onError((error, c) => {
+    console.error(error);
+    return c.json<Api.ApiError>({ error: 'internal' }, 500);
+  });
+  app.notFound((c) => c.json<Api.ApiError>({ error: 'not-found' }, 404));
+
+  const requireUser = createMiddleware<Env>(async (c, next) => {
+    const header = c.req.header('authorization') ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+    const userId = token.length > 0 ? verifyToken(token, authSecret, now()) : null;
+    if (userId === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    c.set('userId', userId);
+    await next();
+  });
+
+  app.get('/health', (c) => c.json({ ok: true }));
+
+  // --- Sign-in ---------------------------------------------------------------
+
+  app.post('/auth/code', async (c) => {
+    const body = await readBody(c, SendCodeBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.startSignIn(body.value.email);
+    if (result.ok) {
+      return c.json<Api.SendCodeResponse>({
+        verificationId: result.verificationId,
+        email: result.email,
+        expiresAt: result.expiresAt.toISOString(),
+      });
+    }
+    switch (result.reason) {
+      case 'unsupported-domain':
+        return c.json<Api.ApiError>({ error: 'unsupported-domain' }, 422);
+      case 'rate-limited': {
+        const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
+        c.header('Retry-After', String(retryAfterSeconds));
+        return c.json<Api.ApiError>({ error: 'rate-limited', retryAfterSeconds }, 429);
+      }
+      case 'delivery-failed':
+        console.error('sign-in code delivery failed', result.error);
+        return c.json<Api.ApiError>({ error: 'delivery-failed' }, 502);
+    }
+  });
+
+  app.post('/auth/verify', async (c) => {
+    const body = await readBody(c, VerifyCodeBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.verifyCode(body.value);
+    if (!result.ok) {
+      return result.reason === 'invalid-code'
+        ? c.json<Api.ApiError>({ error: 'invalid-code', attemptsRemaining: result.attemptsRemaining ?? 0 }, 401)
+        : c.json<Api.ApiError>({ error: result.reason }, 400);
+    }
+    const session = issueToken(result.userId, authSecret, now());
+    return c.json<Api.SessionResponse>({ token: session.token, expiresAt: session.expiresAt.toISOString() });
+  });
+
+  // --- Account and profile ---------------------------------------------------
+
+  app.get('/me', requireUser, async (c) => {
+    const account = await services.getAccount(c.get('userId'));
+    if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    return c.json<Api.Account>(account);
+  });
+
+  app.put('/me/profile', requireUser, async (c) => {
+    const body = await readBody(c, ProfileBody);
+    if (!body.ok) return body.response;
+
+    const userId = c.get('userId');
+    const result = await services.saveProfile(userId, {
+      ...body.value,
+      birthDate: new Date(`${body.value.birthDate}T00:00:00Z`),
+    });
+    if (!result.ok) return c.json<Api.ApiError>({ error: 'invalid', problems: result.problems }, 422);
+    const account = await services.getAccount(userId);
+    if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    return c.json<Api.Account>(account);
+  });
+
+  app.put('/me/active', requireUser, async (c) => {
+    const body = await readBody(c, ActiveBody);
+    if (!body.ok) return body.response;
+
+    const updated = await services.setProfileActive(c.get('userId'), body.value.active);
+    if (!updated) return c.json<Api.ApiError>({ error: 'no-profile' }, 409);
+    return c.json<Api.ActiveRequest>({ active: body.value.active });
+  });
+
+  // --- Questionnaire ---------------------------------------------------------
+
+  app.get('/questionnaire', requireUser, async (c) => {
+    const questionnaire = await services.getQuestionnaire();
+    if (questionnaire === null) return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+    return c.json<Api.Questionnaire>(questionnaire);
+  });
+
+  app.get('/me/answers', requireUser, async (c) =>
+    c.json<Api.AnswersBody>({ answers: await services.getAnswers(c.get('userId')) }),
+  );
+
+  app.put('/me/answers', requireUser, async (c) => {
+    const body = await readBody(c, AnswersBody);
+    if (!body.ok) return body.response;
+    return saved(c, await services.saveAnswers(c.get('userId'), body.value.answers));
+  });
+
+  app.get('/me/desires', requireUser, async (c) =>
+    c.json<Api.DesiresBody>({ desires: await services.getDesires(c.get('userId')) }),
+  );
+
+  app.put('/me/desires', requireUser, async (c) => {
+    const body = await readBody(c, DesiresBody);
+    if (!body.ok) return body.response;
+    return saved(c, await services.saveDesires(c.get('userId'), body.value.desires));
+  });
+
+  // --- Rounds ----------------------------------------------------------------
+
+  app.get('/home', requireUser, async (c) => {
+    const userId = c.get('userId');
+    const [account, result] = await Promise.all([services.getAccount(userId), services.getLatestResult(userId)]);
+    if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    return c.json<Api.Home>({
+      nextRoundAt: nextRoundAt(now(), schedule).toISOString(),
+      isActive: account.profile?.isActive ?? false,
+      result,
+    });
+  });
+
+  app.post('/matches/:matchId/hello', requireUser, async (c) => {
+    const result = await services.sayHello(c.get('userId'), c.req.param('matchId'));
+    if (!result.ok) return matchActionError(c, result.reason);
+    return c.json<Api.HelloResponse>({ mutual: result.mutual });
+  });
+
+  app.post('/matches/:matchId/pass', requireUser, async (c) => {
+    const result = await services.passMatch(c.get('userId'), c.req.param('matchId'));
+    if (!result.ok) return matchActionError(c, result.reason);
+    return c.body(null, 204);
+  });
+
+  return app;
+}
+
+/** Parse and validate a JSON body; on failure, the 400 response to return. */
+async function readBody<T>(
+  c: Context,
+  schema: z.ZodType<T>,
+): Promise<{ ok: true; value: T } | { ok: false; response: Response }> {
+  let json: unknown;
+  try {
+    json = await c.req.json();
+  } catch {
+    return { ok: false, response: c.json<Api.ApiError>({ error: 'invalid-json' }, 400) };
+  }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) {
+    const problems = parsed.error.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${issue.message}`);
+    return { ok: false, response: c.json<Api.ApiError>({ error: 'invalid-body', problems }, 400) };
+  }
+  return { ok: true, value: parsed.data };
+}
+
+function saved(c: Context, result: SaveResult): Response {
+  if (result.ok) return c.body(null, 204);
+  return result.reason === 'no-profile'
+    ? c.json<Api.ApiError>({ error: 'no-profile' }, 409)
+    : c.json<Api.ApiError>({ error: 'invalid', problems: result.problems }, 422);
+}
+
+function matchActionError(c: Context, reason: 'not-found' | 'passed'): Response {
+  return reason === 'not-found'
+    ? c.json<Api.ApiError>({ error: 'not-found' }, 404)
+    : c.json<Api.ApiError>({ error: 'passed' }, 409);
+}

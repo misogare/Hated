@@ -1,0 +1,35 @@
+{
+  "name": "@hated/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HateD HTTP API: email-code sign-in, profile and questionnaire, and round results for the mobile app.",
+  "main": "./dist/server.js",
+  "exports": {
+    "./contract": {
+      "types": "./src/contract.ts",
+      "default": "./src/contract.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --emitDeclarationOnly",
+    "dev": "tsc -b && tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hated/db": "*",
+    "@hono/node-server": "^2.1.3",
+    "dotenv": "^18.0.5",
+    "hono": "^4.13.13",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

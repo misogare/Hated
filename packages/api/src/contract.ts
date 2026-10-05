@@ -1,0 +1,142 @@
+/**
+ * The HTTP contract between the API and the app: request and response bodies.
+ *
+ * Self-contained on purpose (no imports), so the mobile app can import these
+ * types straight from source with `import type`, with no build step and no
+ * server code pulled into the bundle. The API asserts at compile time that what
+ * it sends matches these shapes.
+ *
+ * Dates travel as ISO 8601 strings; birthdays as `YYYY-MM-DD`.
+ */
+
+/** Every non-2xx response. `error` is a stable machine-readable code. */
+export interface ApiError {
+  error: string;
+  /** Human-readable problems, for `invalid` input. */
+  problems?: string[];
+  /** Wrong-code guesses left, for `invalid-code`. */
+  attemptsRemaining?: number;
+  /** When a rate-limited request may be retried. */
+  retryAfterSeconds?: number;
+}
+
+// --- Sign-in ---------------------------------------------------------------
+
+export interface SendCodeRequest {
+  email: string;
+}
+
+export interface SendCodeResponse {
+  verificationId: string;
+  /** The normalised address the code went to. */
+  email: string;
+  expiresAt: string;
+}
+
+export interface VerifyCodeRequest {
+  verificationId: string;
+  code: string;
+}
+
+export interface SessionResponse {
+  /** Send as `Authorization: Bearer <token>`. */
+  token: string;
+  expiresAt: string;
+}
+
+// --- Account and profile ---------------------------------------------------
+
+export interface Account {
+  userId: string;
+  email: string;
+  emailVerified: boolean;
+  institution: { name: string; domain: string } | null;
+  profile: {
+    displayName: string;
+    birthDate: string;
+    age: number;
+    gender: string;
+    seeking: string[];
+    isActive: boolean;
+  } | null;
+  onboarding: { profile: boolean; answers: boolean };
+}
+
+export interface ProfileRequest {
+  displayName: string;
+  /** `YYYY-MM-DD`. */
+  birthDate: string;
+  gender: string;
+  /** Empty means open to everyone. */
+  seeking: string[];
+}
+
+export interface ActiveRequest {
+  active: boolean;
+}
+
+// --- Questionnaire ---------------------------------------------------------
+
+export type QuestionKind = 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'SCALE' | 'BOOLEAN' | 'TEXT';
+
+export interface Question {
+  key: string;
+  prompt: string;
+  kind: QuestionKind;
+  traitKey: string | null;
+  /** SCALE: `{ min, max, left?, right? }`; SINGLE_CHOICE: `{ choices }`. */
+  options: unknown;
+}
+
+export interface Questionnaire {
+  id: string;
+  title: string;
+  questions: Question[];
+}
+
+/** A SCALE answer in [0, 1], a SINGLE_CHOICE choice, or null to skip. */
+export type AnswerValue = number | string | null;
+
+export interface AnswersBody {
+  answers: Record<string, AnswerValue>;
+}
+
+export interface Desire {
+  /** The value hoped for, in [0, 1]. */
+  target: number;
+  /** How much it matters, in [0, 1]; 0 means "don't mind". */
+  weight: number;
+}
+
+export interface DesiresBody {
+  desires: Record<string, Desire>;
+}
+
+// --- Rounds ----------------------------------------------------------------
+
+export interface Match {
+  matchId: string;
+  partner: { displayName: string; age: number; institution: string | null };
+  reasons: string[];
+  saidHello: boolean;
+  mutual: boolean;
+  passed: boolean;
+}
+
+export type RoundResult =
+  | { status: 'none' }
+  | { status: 'matched'; roundId: string; publishedAt: string; match: Match }
+  | { status: 'unmatched'; roundId: string; publishedAt: string; reason: string | null };
+
+export interface Home {
+  /** When the next round closes. */
+  nextRoundAt: string;
+  /** Whether this person is in the next round; false before they have a profile. */
+  isActive: boolean;
+  /** The latest published round they were in. */
+  result: RoundResult;
+}
+
+export interface HelloResponse {
+  mutual: boolean;
+}
