@@ -2,7 +2,7 @@ import type { Home as HomeData } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { describeError } from '@/api/client';
 import { Button } from '@/components/Button';
@@ -15,7 +15,7 @@ import { fonts, night } from '@/theme';
 
 /** Home, in the evening palette: the countdown to the next round, and the latest result. */
 export default function Home() {
-  const { api, signOut } = useSession();
+  const { api } = useSession();
   const [home, setHome] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -50,19 +50,11 @@ export default function Home() {
     }
   }
 
-  function openSettings() {
-    Alert.alert('Settings', undefined, [
-      { text: 'Edit about you', onPress: () => router.push({ pathname: '/onboarding/about', params: { edit: '1' } }) },
-      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }
-
   return (
     <Screen tone="night" scroll>
       <View style={styles.header}>
         <Wordmark tone="night" size={24} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={openSettings} style={styles.iconButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => router.push('/settings')} style={styles.iconButton}>
           <Feather name="settings" size={20} color={night.text} />
         </Pressable>
       </View>
