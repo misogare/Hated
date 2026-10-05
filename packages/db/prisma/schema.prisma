@@ -251,20 +251,23 @@ model Answer {
 /// One execution of the engine over a population: Gale-Shapley plus the
 /// rotation-lattice objective search. `metrics` stores the RoundMetrics summary.
 model MatchRound {
-  id          String           @id @default(cuid())
-  status      MatchRoundStatus @default(DRAFT)
+  id           String           @id @default(cuid())
+  status       MatchRoundStatus @default(DRAFT)
   /// The fairness objective the matching was optimised for, e.g. "egalitarian".
-  objective   String
+  objective    String
   /// FirstDateConfig + partition options the round ran with.
-  config      Json
-  seed        Int?
-  population  Int
-  matched     Int
-  matchRate   Float
-  stable      Boolean
-  metrics     Json?
-  startedAt   DateTime         @default(now())
-  completedAt DateTime?
+  config       Json
+  seed         Int?
+  population   Int
+  matched      Int
+  matchRate    Float
+  stable       Boolean
+  metrics      Json?
+  startedAt    DateTime         @default(now())
+  completedAt  DateTime?
+  /// The weekly slot an automatic round ran for (null for one run by hand).
+  /// Unique, so two servers can never both run the same slot.
+  scheduledFor DateTime?        @unique
 
   participants MatchRoundParticipant[]
   matches      Match[]

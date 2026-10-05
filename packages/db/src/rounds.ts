@@ -37,6 +37,8 @@ export interface PersistMatchRoundOptions {
   population?: readonly Profile[];
   startedAt?: Date;
   completedAt?: Date;
+  /** The weekly slot this round ran for, when the scheduler ran it. */
+  scheduledFor?: Date;
 }
 
 export interface PersistedMatchRound {
@@ -90,6 +92,7 @@ export async function persistMatchRound(
         metrics: toJson(buildMetrics(result)),
         startedAt,
         completedAt,
+        scheduledFor: options.scheduledFor ?? null,
       },
       select: { id: true },
     });

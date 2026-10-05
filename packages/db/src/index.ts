@@ -33,6 +33,12 @@ export {
 } from './rounds.js';
 
 export {
+  runScheduledRound,
+  type ScheduledRoundOptions,
+  type ScheduledRoundResult,
+} from './scheduled-rounds.js';
+
+export {
   getRoundReport,
   type RoundReport,
   type RoundReportMatch,
