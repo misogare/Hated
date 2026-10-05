@@ -2,12 +2,12 @@ import type { Home as HomeData } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { describeError } from '@/api/client';
 import { UnreadBadge } from '@/components/Badge';
 import { Button } from '@/components/Button';
-import { Notice, Wordmark } from '@/components/Controls';
+import { NightSwitch, Notice, Wordmark } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow, Heading } from '@/components/Text';
 import { roundTime } from '@/copy';
@@ -89,13 +89,11 @@ export default function Home() {
             </Body>
             <View style={styles.toggleRow}>
               <Text style={styles.toggleLabel}>Sit this round out</Text>
-              <Switch
+              <NightSwitch
                 accessibilityLabel="Sit this round out"
                 value={!home.isActive}
                 onValueChange={(sittingOut) => void toggle(!sittingOut)}
                 disabled={toggling}
-                trackColor={{ false: night.line, true: night.honey }}
-                thumbColor={night.text}
               />
             </View>
           </View>

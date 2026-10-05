@@ -1,9 +1,19 @@
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View, type TextInputProps } from 'react-native';
 
 import { day, fonts, night, type Tone } from '@/theme';
+
+/**
+ * A switch in the evening palette: honey track, cream thumb. The web build
+ * takes the "on" thumb colour from `activeThumbColor` (react-native-web only,
+ * so not in React Native's types); without it the thumb turns teal.
+ */
+export function NightSwitch(props: { accessibilityLabel: string; value: boolean; onValueChange: (on: boolean) => void; disabled?: boolean }) {
+  const web = { activeThumbColor: night.text };
+  return <Switch {...props} trackColor={{ false: night.line, true: night.honey }} thumbColor={night.text} {...web} />;
+}
 
 /** Round back button; goes back in the stack unless told where to go. */
 export function BackButton({ tone = 'day', onPress }: { tone?: Tone; onPress?: () => void }) {
