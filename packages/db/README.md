@@ -33,7 +33,8 @@ only the storage shape.
    ```
 
 Other scripts: `generate` (regenerate the client), `push` (schema → DB without a
-migration), `studio`, `migrate:deploy`, `typecheck`.
+migration), `studio`, `migrate:deploy`, `round` (run one match round — see
+below), `typecheck`.
 
 ### Seed data
 
@@ -151,6 +152,38 @@ await persistMatchRound(prisma, round, { seed, population });
   `not-selected`.
 - The stored `metrics` JSON also carries a compact `fair` summary (objective,
   strategy, improvement, ...) so a round can be audited after the fact.
+
+## Running a round from the CLI
+
+`npm run round` (→ `tsx src/cli.ts`) is the operational entry point: it loads the
+active population, runs one match round, persists it, and prints a summary. It
+exercises the same load → run → persist path an API worker would, against a real
+database.
+
+```bash
+# from the repo root
+npm run round -- --seed 42 --objective egalitarian
+
+# package-local
+cd packages/db
+npm run round -- --dry-run --json
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--seed <n>` | RNG seed for the fairness search (default `42`) |
+| `--objective <name>` | which stable matching to ship (default `min-regret`) |
+| `--status <name>` | stored round status when persisting (default `COMPUTED`) |
+| `--topK <n>` / `--minScore <n>` | override the FirstDate knobs |
+| `--ids <a,b,c>` | restrict the population to these profile ids |
+| `--include-inactive` | include profiles with `isActive = false` |
+| `--dry-run` | run the round but write nothing |
+| `--json` | emit the summary as JSON (for scripting) |
+
+It reads `DATABASE_URL` from `packages/db/.env`; run `npm run seed` first if the
+institution/questionnaire tables are empty. The population itself must exist as
+`Profile` rows. A dry run is useful for previewing what a scoring change does
+before it is written as a round.
 
 ## Using the client
 
