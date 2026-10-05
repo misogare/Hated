@@ -47,6 +47,15 @@ export {
 } from './round-info.js';
 
 export {
+  SESSION_TTL_MS,
+  createSession,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
+  type NewSession,
+} from './sessions.js';
+
+export {
   startSignIn,
   type StartSignInOptions,
   type StartSignInResult,

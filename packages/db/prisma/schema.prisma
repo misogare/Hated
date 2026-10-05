@@ -73,8 +73,26 @@ model User {
 
   profile       Profile?
   verifications InstitutionVerification[]
+  sessions      Session[]
 
   @@map("users")
+}
+
+/// A signed-in device. The app holds a random token; only its SHA-256 hash is
+/// stored, so a database leak cannot be replayed as a sign-in.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  /// Set when the device signs out (or every device is signed out).
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 /// The matching-relevant half of an account. Mirrors `Profile` in @hated/core:
