@@ -41,6 +41,10 @@ export interface ApiClient {
   /** This device can receive push notifications. */
   registerPushToken(token: string, platform: Api.PushTokenRequest['platform']): Promise<void>;
   me(): Promise<Api.Account>;
+  /** Erase the account and everything in it, for good. */
+  deleteAccount(): Promise<void>;
+  /** Turn kinds of push notification on or off; returns all of them. */
+  setNotifications(changes: Api.NotificationsRequest): Promise<Api.NotificationPrefs>;
   saveProfile(profile: Api.ProfileRequest): Promise<Api.Account>;
   setActive(active: boolean): Promise<Api.ActiveRequest>;
   questionnaire(): Promise<Api.Questionnaire>;
@@ -103,6 +107,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
     registerPushToken: (token, platform) =>
       call('PUT', '/me/push-token', { token, platform } satisfies Api.PushTokenRequest),
     me: () => call('GET', '/me'),
+    deleteAccount: () => call('DELETE', '/me'),
+    setNotifications: (changes) => call('PUT', '/me/notifications', changes),
     saveProfile: (profile) => call('PUT', '/me/profile', profile),
     setActive: (active) => call('PUT', '/me/active', { active } satisfies Api.ActiveRequest),
     questionnaire: () => call('GET', '/questionnaire'),

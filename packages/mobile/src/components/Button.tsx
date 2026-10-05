@@ -5,7 +5,8 @@ import { day, fonts, night, type Tone } from '@/theme';
 interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'text';
+  /** `danger` is for the one thing that can't be undone: deleting the account. */
+  variant?: 'primary' | 'secondary' | 'text' | 'danger';
   tone?: Tone;
   disabled?: boolean;
   /** Shows a spinner and ignores presses. */
@@ -40,6 +41,7 @@ export function Button({
         variant === 'text' ? styles.text : styles.pill,
         variant === 'secondary' && { borderWidth: 1.5, borderColor: palette.border, height: 52 },
         { backgroundColor: disabled ? palette.disabledBg : pressed ? palette.pressed : palette.bg },
+        variant === 'danger' && pressed && styles.dangerPressed,
         style,
       ]}
     >
@@ -54,7 +56,13 @@ export function Button({
   );
 }
 
-function colors(variant: 'primary' | 'secondary' | 'text', tone: Tone) {
+function colors(variant: 'primary' | 'secondary' | 'text' | 'danger', tone: Tone) {
+  if (variant === 'danger') {
+    const bg = tone === 'day' ? day.danger : night.rose;
+    return tone === 'day'
+      ? { bg, pressed: bg, fg: '#FFFFFF', border: bg, disabledBg: day.disabled, disabledFg: day.muted }
+      : { bg, pressed: bg, fg: night.bg, border: bg, disabledBg: night.line, disabledFg: night.muted };
+  }
   if (variant === 'primary') {
     return tone === 'day'
       ? { bg: day.accent, pressed: day.accentPressed, fg: '#FFFFFF', border: day.accent, disabledBg: day.disabled, disabledFg: day.muted }
@@ -76,4 +84,5 @@ const styles = StyleSheet.create({
   text: { minHeight: 44, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 22 },
   label: { fontFamily: fonts.bodySemi, fontSize: 17 },
   textLabel: { fontSize: 15, textDecorationLine: 'underline' },
+  dangerPressed: { opacity: 0.85 },
 });

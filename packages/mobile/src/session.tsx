@@ -31,6 +31,10 @@ interface Session {
   signOut(options?: { everywhere?: boolean }): Promise<void>;
   /** Reload the account, e.g. after editing the profile. */
   refresh(): Promise<Account | null>;
+  /** Erase the account on the server, then sign out here. Throws if the server refused. */
+  deleteAccount(): Promise<void>;
+  /** A word for the welcome screen after signing out, e.g. that the account was deleted. */
+  notice: string | null;
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -50,6 +54,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [token] = useState(tokenHolder);
   const [status, setStatus] = useState<Status>('loading');
   const [account, setAccount] = useState<Account | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   /** Drop the session on this device only. */
   const forget = useCallback(async () => {
@@ -101,6 +106,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (next: string) => {
+      setNotice(null);
       token.set(next);
       await writeToken(next);
       await refresh();
@@ -116,9 +122,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })();
   }, [token, refresh]);
 
+  const deleteAccount = useCallback(async () => {
+    await api.deleteAccount();
+    await forget();
+    setNotice('Your account has been deleted, with everything in it.');
+  }, [api, forget]);
+
   const value = useMemo(
-    () => ({ status, account, api, signIn, signOut, refresh }),
-    [status, account, api, signIn, signOut, refresh],
+    () => ({ status, account, api, signIn, signOut, refresh, deleteAccount, notice }),
+    [status, account, api, signIn, signOut, refresh, deleteAccount, notice],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
