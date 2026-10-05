@@ -96,16 +96,17 @@ model Profile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  seeking      ProfileSeeking[]
-  traits       ProfileTrait[]
-  desires      ProfileDesire[]
-  blocksMade   ProfileBlock[]            @relation("blocker")
-  blocksTargetingMe ProfileBlock[]       @relation("blocked")
-  responses    QuestionnaireResponse[]
-  roundEntries MatchRoundParticipant[]
-  matchesAsA   Match[]                   @relation("MatchSideA")
-  matchesAsB   Match[]                   @relation("MatchSideB")
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seeking           ProfileSeeking[]
+  traits            ProfileTrait[]
+  desires           ProfileDesire[]
+  blocksMade        ProfileBlock[]          @relation("blocker")
+  blocksTargetingMe ProfileBlock[]          @relation("blocked")
+  responses         QuestionnaireResponse[]
+  roundEntries      MatchRoundParticipant[]
+  matchesAsA        Match[]                 @relation("MatchSideA")
+  matchesAsB        Match[]                 @relation("MatchSideB")
+  messagesSent      Message[]
 
   @@index([genderId])
   @@index([isActive])
@@ -228,7 +229,7 @@ model QuestionnaireResponse {
 }
 
 model Answer {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   responseId  String
   questionId  String
   valueNumber Float?
@@ -293,7 +294,7 @@ model MatchRoundParticipant {
 /// A single stable pair. The two unique constraints enforce the product promise:
 /// each profile appears at most once per round.
 model Match {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   roundId    String
   profileAId String
   profileBId String
@@ -306,16 +307,34 @@ model Match {
   /// When each side said hello. A conversation opens once both are set.
   helloAAt   DateTime?
   helloBAt   DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   round    MatchRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
   profileA Profile    @relation("MatchSideA", fields: [profileAId], references: [id], onDelete: Cascade)
   profileB Profile    @relation("MatchSideB", fields: [profileBId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@unique([roundId, profileAId])
   @@unique([roundId, profileBId])
   @@unique([roundId, profileAId, profileBId])
   @@map("matches")
+}
+
+/// One message in a match's conversation. Only a match where both have said
+/// hello, and neither has passed, can exchange messages.
+model Message {
+  id        String   @id @default(cuid())
+  matchId   String
+  /// The sender's profile; always one of the match's two sides.
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  match  Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender Profile @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@map("messages")
 }
 
 // ---------------------------------------------------------------------------
@@ -356,8 +375,8 @@ model InstitutionVerification {
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  institution Institution? @relation(fields: [institutionId], references: [id])
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution   Institution? @relation(fields: [institutionId], references: [id])
   institutionId String?
 
   @@index([email, status])

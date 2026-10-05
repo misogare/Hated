@@ -83,6 +83,16 @@ export {
 } from './results.js';
 
 export {
+  MAX_MESSAGE_LENGTH,
+  listMessages,
+  sendMessage,
+  type ChatClosedReason,
+  type ListMessagesResult,
+  type MessageView,
+  type SendMessageResult,
+} from './chat.js';
+
+export {
   findInstitutionForEmail,
   normalizeEmail,
   requestVerificationCode,

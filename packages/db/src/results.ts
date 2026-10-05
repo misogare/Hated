@@ -233,8 +233,9 @@ export async function passMatch(prisma: PrismaClient, userId: string, matchId: s
 /**
  * The match if this person is on it and its round is published. Anything else
  * reads as not found, so ids of other people's matches reveal nothing.
+ * Shared with the chat, which also needs `mutual`.
  */
-async function findOwnMatch(prisma: PrismaClient, userId: string, matchId: string) {
+export async function findOwnMatch(prisma: PrismaClient, userId: string, matchId: string) {
   const profile = await prisma.profile.findUnique({ where: { userId }, select: { id: true } });
   if (profile === null) return null;
   const match = await prisma.match.findFirst({
@@ -243,7 +244,7 @@ async function findOwnMatch(prisma: PrismaClient, userId: string, matchId: strin
       round: { status: 'PUBLISHED' },
       OR: [{ profileAId: profile.id }, { profileBId: profile.id }],
     },
-    select: { profileAId: true, profileBId: true },
+    select: { profileAId: true, profileBId: true, helloAAt: true, helloBAt: true },
   });
   if (match === null) return null;
 
@@ -258,7 +259,13 @@ async function findOwnMatch(prisma: PrismaClient, userId: string, matchId: strin
     },
     select: { blockerId: true },
   });
-  return { profileId: profile.id, partnerId, isA, passed: block !== null };
+  return {
+    profileId: profile.id,
+    partnerId,
+    isA,
+    passed: block !== null,
+    mutual: match.helloAAt !== null && match.helloBAt !== null,
+  };
 }
 
 function snapshot(profile: {
