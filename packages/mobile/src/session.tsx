@@ -23,7 +23,8 @@ interface Session {
   account: Account | null;
   api: ApiClient;
   signIn(token: string): Promise<void>;
-  signOut(): Promise<void>;
+  /** End the session on the server (every device with `everywhere`), then forget it here. */
+  signOut(options?: { everywhere?: boolean }): Promise<void>;
   /** Reload the account, e.g. after editing the profile. */
   refresh(): Promise<Account | null>;
 }
@@ -35,7 +36,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [account, setAccount] = useState<Account | null>(null);
 
-  const signOut = useCallback(async () => {
+  /** Drop the session on this device only. */
+  const forget = useCallback(async () => {
     tokenRef.current = null;
     setAccount(null);
     setStatus('signed-out');
@@ -47,9 +49,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       createApiClient({
         baseUrl: apiBaseUrl(),
         token: () => tokenRef.current,
-        onUnauthorized: () => void signOut(),
+        // The server already says the session is gone, so only forget it here
+        // (asking the server to sign out again would just be another 401).
+        onUnauthorized: () => void forget(),
       }),
-    [signOut],
+    [forget],
+  );
+
+  const signOut = useCallback(
+    async (options: { everywhere?: boolean } = {}) => {
+      try {
+        await api.signOut(options.everywhere ?? false);
+      } catch {
+        // Offline or already ended: signing out on this device must still work.
+      }
+      await forget();
+    },
+    [api, forget],
   );
 
   const refresh = useCallback(async () => {

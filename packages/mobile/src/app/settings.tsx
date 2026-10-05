@@ -19,7 +19,7 @@ const EDITORS: Array<{ label: string; hint: string; href: Href }> = [
 /** Settings, opened from home: the account, shortcuts to each editor, and signing out. */
 export default function Settings() {
   const { account, signOut } = useSession();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<'device' | 'everywhere' | null>(null);
 
   return (
     <Screen tone="night" scroll>
@@ -61,17 +61,29 @@ export default function Settings() {
       </View>
 
       <View style={styles.signOut}>
-        {confirming ? (
+        {confirming === null ? (
+          <>
+            <Button label="Sign out" tone="night" variant="secondary" onPress={() => setConfirming('device')} />
+            <Button label="Sign out of all devices" tone="night" variant="text" onPress={() => setConfirming('everywhere')} />
+          </>
+        ) : (
           <View style={styles.card}>
-            <Text style={styles.confirmTitle}>Sign out of HateD?</Text>
-            <Text style={styles.confirmBody}>You can sign back in any time with your email.</Text>
+            <Text style={styles.confirmTitle}>{confirming === 'device' ? 'Sign out of HateD?' : 'Sign out everywhere?'}</Text>
+            <Text style={styles.confirmBody}>
+              {confirming === 'device'
+                ? 'You can sign back in any time with your email.'
+                : 'Every phone and browser signed in to your account will be signed out, this one included.'}
+            </Text>
             <View style={styles.confirmButtons}>
-              <Button label="Cancel" tone="night" variant="secondary" onPress={() => setConfirming(false)} style={styles.confirmButton} />
-              <Button label="Sign out" tone="night" onPress={() => void signOut()} style={styles.confirmButton} />
+              <Button label="Cancel" tone="night" variant="secondary" onPress={() => setConfirming(null)} style={styles.confirmButton} />
+              <Button
+                label="Sign out"
+                tone="night"
+                onPress={() => void signOut({ everywhere: confirming === 'everywhere' })}
+                style={styles.confirmButton}
+              />
             </View>
           </View>
-        ) : (
-          <Button label="Sign out" tone="night" variant="secondary" onPress={() => setConfirming(true)} />
         )}
       </View>
     </Screen>
@@ -102,7 +114,7 @@ const styles = StyleSheet.create({
   linkText: { flex: 1, gap: 2 },
   linkLabel: { fontFamily: fonts.bodySemi, fontSize: 16, color: night.text },
   linkHint: { fontFamily: fonts.body, fontSize: 13.5, color: night.muted },
-  signOut: { marginTop: 32, marginBottom: 12 },
+  signOut: { marginTop: 32, marginBottom: 12, gap: 8 },
   confirmTitle: { marginTop: 18, fontFamily: fonts.displayBold, fontSize: 19, color: night.text },
   confirmBody: { marginTop: 6, fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: night.muted },
   confirmButtons: { marginTop: 16, marginBottom: 18, flexDirection: 'row', gap: 10 },

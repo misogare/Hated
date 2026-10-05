@@ -33,6 +33,8 @@ export function apiBaseUrl(): string {
 export interface ApiClient {
   sendCode(email: string): Promise<Api.SendCodeResponse>;
   verifyCode(verificationId: string, code: string): Promise<Api.SessionResponse>;
+  /** End this device's session on the server, or with `everywhere`, every session. */
+  signOut(everywhere?: boolean): Promise<void>;
   me(): Promise<Api.Account>;
   saveProfile(profile: Api.ProfileRequest): Promise<Api.Account>;
   setActive(active: boolean): Promise<Api.ActiveRequest>;
@@ -88,6 +90,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
     sendCode: (email) => call('POST', '/auth/code', { email } satisfies Api.SendCodeRequest),
     verifyCode: (verificationId, code) =>
       call('POST', '/auth/verify', { verificationId, code } satisfies Api.VerifyCodeRequest),
+    signOut: (everywhere = false) =>
+      call('POST', '/auth/sign-out', everywhere ? ({ everywhere: true } satisfies Api.SignOutRequest) : undefined),
     me: () => call('GET', '/me'),
     saveProfile: (profile) => call('PUT', '/me/profile', profile),
     setActive: (active) => call('PUT', '/me/active', { active } satisfies Api.ActiveRequest),
