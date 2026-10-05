@@ -39,6 +39,7 @@ for quick layout checks; the phone is the real target.
 | `src/app/_layout.tsx` | Loads the fonts and decides which routes exist with `Stack.Protected`, so signing in or out moves you to the right place. |
 | `src/session.tsx` | The session: token in the keychain/keystore (`expo-secure-store`), the account, and an API client that signs out on any 401. |
 | `src/api/client.ts` | Typed calls to the API, plus friendly wording for its errors. |
+| `src/notifications.ts` | Push notifications: permission, registering this device with the API, and opening the screen a tapped notification is about. |
 | `src/theme.ts` | Colours and fonts. Day palette for sign-in and profile; night palette for rounds. |
 | `src/components/` | Screen, text, buttons, chips, fields, progress. |
 | `src/copy.ts` | Slider phrases and labels per trait, the gender vocabulary, round-time formatting. |
@@ -57,10 +58,56 @@ show there, on its tile on home, and on the "Open chat" button.
 middle of the scale, as in the prototype. "Don't mind" leaves a trait out of
 matching entirely.
 
+## Push notifications
+
+Home asks for permission once (the system shows its prompt) and registers this
+device's Expo push token with the API. People then hear about a new message
+("New message from Maya", never the text), the other person saying hello back,
+and a round's result. Tapping one opens that conversation, or home for a round.
+A message in the conversation already on screen arrives quietly, without a
+banner. Signing out stops the device's notifications.
+
+Push needs a few things the code can't do for you. Until they're done, the app
+skips push quietly and everything else works; in development the console says
+why (e.g. `[push] not set up: no-project`).
+
+1. **An Expo project.** Push tokens belong to one. Once, from `packages/mobile`:
+
+   ```bash
+   npx eas-cli@latest login
+   npx eas-cli@latest init     # writes extra.eas.projectId into app.json; commit that
+   ```
+
+2. **Credentials.** Expo delivers through Google and Apple, so each platform
+   needs its own (see Expo's
+   [push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/)):
+   - **Android:** a Firebase project. Put its `google-services.json` in
+     `packages/mobile`, set `android.googleServicesFile` to it in `app.json`,
+     and upload the Firebase service account key with
+     `npx eas-cli@latest credentials` (Android → Google Service Account → FCM V1)
+     ([guide](https://docs.expo.dev/push-notifications/fcm-credentials/)).
+   - **iOS:** a paid Apple Developer account. EAS offers to set up push the
+     first time it builds for iOS.
+3. **A development build.** Expo Go and the web build can't receive pushes. A
+   phone, an Android emulator with Google Play, or an iOS simulator (Xcode 14+)
+   can, running a build that includes this app's native code:
+
+   ```bash
+   npx expo install expo-dev-client
+   npx eas-cli@latest build --profile development --platform android   # in the cloud
+   # or: npx expo run:android, with Android Studio installed
+   ```
+
+The API sends through Expo's push service and needs no keys of its own, unless
+the Expo project turns on enhanced push security; then set `EXPO_ACCESS_TOKEN`
+for the API (see `packages/api/README.md`). To test without the app, Expo's
+[push tool](https://expo.dev/notifications) sends to a token by hand.
+
 ## Checks
 
 ```bash
 npm run typecheck -w @hated/mobile
+npm run lint -w @hated/mobile      # expo lint
 npx expo-doctor                   # from packages/mobile
 ```
 
