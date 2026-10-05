@@ -26,6 +26,12 @@ export {
   type LoadPopulationOptions,
 } from './population.js';
 
+export {
+  persistMatchRound,
+  type PersistMatchRoundOptions,
+  type PersistedMatchRound,
+} from './rounds.js';
+
 export interface CreatePrismaClientOptions {
   /** Overrides `process.env.DATABASE_URL`. */
   connectionString?: string;

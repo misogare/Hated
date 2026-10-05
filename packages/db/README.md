@@ -128,6 +128,30 @@ Contract details worth knowing:
 The mapper's import from `@hated/core` is type-only, so it adds no runtime
 dependency on the engine.
 
+## Persisting a match round
+
+`persistMatchRound(prisma, roundResult, options?)` writes a completed round in a
+single transaction: the round row, one participant row per person, and one row
+per pair.
+
+```ts
+import { runMatchRound } from '@hated/core';
+import { loadEngineProfiles, persistMatchRound } from '@hated/db';
+
+const population = await loadEngineProfiles(prisma);
+const round = runMatchRound(population, { objective: 'egalitarian' });
+
+await persistMatchRound(prisma, round, { seed, population });
+```
+
+- Passing `population` fills each match's directional scores (`scoreTowards`);
+  without it, scores stay null but 1-based ranks are still stored.
+- Unmatched participants get a coarse `unmatchedReason`:
+  `no-eligible-candidates` when their preference list was empty, otherwise
+  `not-selected`.
+- The stored `metrics` JSON also carries a compact `fair` summary (objective,
+  strategy, improvement, ...) so a round can be audited after the fact.
+
 ## Using the client
 
 Prisma 7 requires a driver adapter, so construct clients through the helper:
