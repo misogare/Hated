@@ -19,7 +19,6 @@
     "@react-native-community/slider": "5.2.0",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
-    "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-linking": "~57.0.11",
     "expo-notifications": "~57.0.21",

@@ -2,18 +2,17 @@
  * Push notifications on the phone: asking permission, registering this device
  * with the API, and opening the right screen when a notification is tapped.
  *
- * Push needs three things the app cannot provide by itself, so registration
- * reports why it did nothing rather than failing:
- * - a real device (simulators and the web build cannot receive pushes);
+ * Push needs things the app cannot provide by itself, so registration reports
+ * why it did nothing rather than failing:
+ * - a development or release build (Expo Go and the web build can't receive
+ *   pushes); a phone, an Android emulator with Google Play, or an iOS simulator;
  * - permission from the person;
  * - an Expo project id (`extra.eas.projectId` in app.json, written by
  *   `eas init`), which is what an Expo push token belongs to.
- * Expo Go on Android cannot receive pushes at all (SDK 53+); a development
- * build can. Expo Go on iPhone can.
+ * See the README for the Firebase (Android) and Apple (iOS) credentials.
  */
 
 import Constants from 'expo-constants';
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect } from 'react';
@@ -62,7 +61,7 @@ export function forgetPushToken(): void {
 
 /** Ask for permission (once), then register this device's push token with the API. */
 export async function registerForPush(api: ApiClient): Promise<PushSetup> {
-  if (!supported || !Device.isDevice) return { ok: false, reason: 'unsupported' };
+  if (!supported) return { ok: false, reason: 'unsupported' };
 
   if (Platform.OS === 'android') {
     // Android needs a channel before it will show the permission prompt.
