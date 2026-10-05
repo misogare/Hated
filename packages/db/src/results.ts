@@ -149,7 +149,9 @@ export async function getLatestResult(
   const match = await prisma.match.findFirst({
     where: { roundId, OR: [{ profileAId: profile.id }, { profileBId: profile.id }] },
   });
-  if (match === null) return { status: 'unmatched', roundId, publishedAt, reason: null };
+  // Matched, but the match is gone: the other person deleted their account.
+  // Show nothing rather than a "no match" that never happened.
+  if (match === null) return { status: 'none' };
 
   const isA = match.profileAId === profile.id;
   const partnerId = isA ? match.profileBId : match.profileAId;

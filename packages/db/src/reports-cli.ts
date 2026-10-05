@@ -83,7 +83,7 @@ async function main(): Promise<void> {
       console.log(`  ${report.id}   ${report.createdAt.slice(0, 16).replace('T', ' ')}   ${report.resolvedAt ? 'reviewed' : 'OPEN'}`);
       console.log(`    reason     ${report.reason}`);
       console.log(`    reported   ${report.reported.name} <${report.reported.email}>  (${report.reportsAboutThem} report${report.reportsAboutThem === 1 ? '' : 's'} in total)`);
-      console.log(`    by         ${report.reporter.name} <${report.reporter.email}>`);
+      console.log(`    by         ${report.reporter === null ? '(a deleted account)' : `${report.reporter.name} <${report.reporter.email}>`}`);
       if (report.details !== null) console.log(`    details    ${report.details}`);
     }
     console.log('');

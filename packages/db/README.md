@@ -438,3 +438,18 @@ npm run reports                    # open reports
 npm run reports -- --all           # include reviewed ones
 npm run reports -- --resolve <id>  # mark one as reviewed
 ```
+
+A report outlives its author: if the person who reported deletes their account,
+the report stays and shows as from `(a deleted account)`.
+
+## Deleting an account
+
+`deleteAccount(prisma, userId)` erases a person, for good (the right to
+erasure). One delete of the user row cascades to everything that is theirs:
+profile, answers, traits and hopes; sessions, push tokens and email
+verifications; their place in past rounds; their matches with every message in
+them; and reports about them. Their partner in a match simply stops seeing it
+(the result reads as `none`, not a "no match" that never happened). Reports
+they made about someone else stay without their name, so the team can still act
+on them. Round totals are counts, not people, and stay as they were. The
+address is free to sign up again afterwards.

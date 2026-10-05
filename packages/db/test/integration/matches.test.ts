@@ -136,13 +136,13 @@ describe.skipIf(!hasTestDatabase)('reviewing reports (Postgres)', () => {
     }
 
     const open = await listReports(prisma);
-    expect(open.map((report) => [report.reporter.name, report.reported.name, report.reportsAboutThem])).toEqual([
+    expect(open.map((report) => [report.reporter?.name, report.reported.name, report.reportsAboutThem])).toEqual([
       ['Sam', 'Max', 2],
       ['Zara', 'Max', 2],
     ]);
 
     expect(await resolveReport(prisma, open[0]!.id)).toBe(true);
-    expect((await listReports(prisma)).map((report) => report.reporter.name)).toEqual(['Zara']);
+    expect((await listReports(prisma)).map((report) => report.reporter?.name)).toEqual(['Zara']);
     expect(await listReports(prisma, { includeResolved: true })).toHaveLength(2);
     expect(await resolveReport(prisma, 'no-such-report')).toBe(false);
   });

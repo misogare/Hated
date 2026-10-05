@@ -8,7 +8,8 @@ export interface ReportView {
   resolvedAt: string | null;
   reason: string;
   details: string | null;
-  reporter: { name: string; email: string };
+  /** Null once the person who reported has deleted their account. */
+  reporter: { name: string; email: string } | null;
   reported: { name: string; email: string };
   /** How many reports (any status) there are about the same person. */
   reportsAboutThem: number;
@@ -35,7 +36,7 @@ export async function listReports(prisma: PrismaClient, options: { includeResolv
     resolvedAt: report.resolvedAt?.toISOString() ?? null,
     reason: report.reason,
     details: report.details,
-    reporter: { name: report.reporter.displayName, email: report.reporter.user.email },
+    reporter: report.reporter === null ? null : { name: report.reporter.displayName, email: report.reporter.user.email },
     reported: { name: report.reported.displayName, email: report.reported.user.email },
     reportsAboutThem: totals.get(report.reportedId) ?? 1,
   }));

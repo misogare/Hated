@@ -372,10 +372,13 @@ model Match {
 }
 
 /// Someone reporting a match for review. Reporting also ends the match (as a
-/// pass does), so the two are never matched again.
+/// pass does), so the two are never matched again. A report outlives its
+/// author's account (the reporter becomes null), so deleting an account cannot
+/// erase what it said about someone else; reports about a deleted account go
+/// with it.
 model Report {
   id         String    @id @default(cuid())
-  reporterId String
+  reporterId String?
   reportedId String
   matchId    String?
   /// One of: harassment, inappropriate, spam, unsafe, other.
@@ -385,7 +388,7 @@ model Report {
   /// Set once someone has reviewed it.
   resolvedAt DateTime?
 
-  reporter Profile @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reporter Profile? @relation("reporter", fields: [reporterId], references: [id], onDelete: SetNull)
   reported Profile @relation("reported", fields: [reportedId], references: [id], onDelete: Cascade)
   match    Match?  @relation(fields: [matchId], references: [id], onDelete: SetNull)
 
