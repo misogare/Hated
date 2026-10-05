@@ -7,8 +7,10 @@ import {
   getAnswers,
   getDesires,
   getLatestResult,
+  listMatches,
   listMessages,
   passMatch,
+  reportMatch,
   resolveSession,
   revokeAllSessions,
   revokeSession,
@@ -47,5 +49,7 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     passMatch: (userId, matchId) => passMatch(prisma, userId, matchId),
     listMessages: (userId, matchId, after) => listMessages(prisma, userId, matchId, { after }),
     sendMessage: (userId, matchId, body) => sendMessage(prisma, userId, matchId, body),
+    listMatches: (userId) => listMatches(prisma, userId),
+    reportMatch: (userId, matchId, input) => reportMatch(prisma, userId, matchId, input),
   };
 }

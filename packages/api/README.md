@@ -42,7 +42,9 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `GET /questionnaire` | The active questionnaire, in order | |
 | `GET`/`PUT /me/answers` | Answers by question key; `null` skips | 409 `no-profile`, 422 `invalid` |
 | `GET`/`PUT /me/desires` | What they hope for per trait; weight 0 = don't mind | 409 `no-profile`, 422 `invalid` |
-| `GET /home` | Next round time, opt-in state, latest published result | |
+| `GET /home` | Next round time, opt-in state, latest published result, unread total | |
+| `GET /matches` | Every match from published rounds, newest first, with last message and unread count | |
+| `POST /matches/:id/report` `{ reason, details? }` | Report for review; also ends the match like a pass | 422 `invalid`, 404 `not-found` |
 | `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed` |
 | `POST /matches/:id/pass` | Never be matched with them again | 404 `not-found` |
 | `GET /matches/:id/messages?after=<id>` | The conversation, oldest first; with `after`, only newer messages (the app polls this) | 403 `not-mutual` until both said hello, 409 `passed`, 404 `not-found` |

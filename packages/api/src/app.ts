@@ -11,9 +11,11 @@ import type {
   AnswerValue,
   DesireInput,
   ListMessagesResult,
+  MatchSummary,
   MatchActionResult,
   NewSession,
   ProfileInput,
+  ReportResult,
   QuestionnaireView,
   RoundResultView,
   SaveProfileResult,
@@ -52,6 +54,8 @@ export interface ApiServices {
   passMatch(userId: string, matchId: string): Promise<MatchActionResult>;
   listMessages(userId: string, matchId: string, after?: string): Promise<ListMessagesResult>;
   sendMessage(userId: string, matchId: string, body: string): Promise<SendMessageResult>;
+  listMatches(userId: string): Promise<MatchSummary[]>;
+  reportMatch(userId: string, matchId: string, input: { reason: string; details?: string }): Promise<ReportResult>;
 }
 
 export interface ApiOptions {
@@ -102,6 +106,8 @@ const AnswersBody = z.object({
 });
 // The service enforces the real limit (2000); this only stops absurd payloads early.
 const MessageBody = z.object({ body: z.string().max(10_000) });
+// The service checks the reason against its list and the real length limit.
+const ReportBody = z.object({ reason: z.string().max(40), details: z.string().max(5_000).optional() });
 const DesiresBody = z.object({
   desires: z.record(Key, z.object({ target: z.number(), weight: z.number() })),
 });
@@ -266,13 +272,33 @@ export function createApp(options: ApiOptions): Hono<Env> {
 
   app.get('/home', requireUser, async (c) => {
     const userId = c.get('userId');
-    const [account, result] = await Promise.all([services.getAccount(userId), services.getLatestResult(userId)]);
+    const [account, result, matches] = await Promise.all([
+      services.getAccount(userId),
+      services.getLatestResult(userId),
+      services.listMatches(userId),
+    ]);
     if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
     return c.json<Api.Home>({
       nextRoundAt: nextRoundAt(now(), schedule).toISOString(),
       isActive: account.profile?.isActive ?? false,
       result,
+      unreadTotal: matches.reduce((total, match) => total + match.unread, 0),
     });
+  });
+
+  app.get('/matches', requireUser, async (c) =>
+    c.json<Api.MatchesResponse>({ matches: await services.listMatches(c.get('userId')) }),
+  );
+
+  app.post('/matches/:matchId/report', requireUser, async (c) => {
+    const body = await readBody(c, ReportBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.reportMatch(c.get('userId'), c.req.param('matchId'), body.value);
+    if (result.ok) return c.body(null, 204);
+    return result.reason === 'not-found'
+      ? c.json<Api.ApiError>({ error: 'not-found' }, 404)
+      : c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
   });
 
   app.post('/matches/:matchId/hello', requireUser, async (c) => {

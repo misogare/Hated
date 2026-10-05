@@ -126,6 +126,33 @@ export interface Match {
   saidHello: boolean;
   mutual: boolean;
   passed: boolean;
+  /** Messages from the partner not yet read. */
+  unread: number;
+}
+
+/** One entry in `GET /matches`: every match from published rounds, newest first. */
+export interface MatchSummary {
+  matchId: string;
+  roundId: string;
+  publishedAt: string;
+  partner: { displayName: string; age: number; institution: string | null };
+  saidHello: boolean;
+  mutual: boolean;
+  passed: boolean;
+  lastMessage: { body: string; sentAt: string; mine: boolean } | null;
+  unread: number;
+}
+
+export interface MatchesResponse {
+  matches: MatchSummary[];
+}
+
+export type ReportReason = 'harassment' | 'inappropriate' | 'spam' | 'unsafe' | 'other';
+
+/** `POST /matches/:id/report`. Reporting also ends the match. */
+export interface ReportRequest {
+  reason: ReportReason;
+  details?: string;
 }
 
 export type RoundResult =
@@ -140,6 +167,8 @@ export interface Home {
   isActive: boolean;
   /** The latest published round they were in. */
   result: RoundResult;
+  /** Unread messages across all their matches. */
+  unreadTotal: number;
 }
 
 export interface HelloResponse {

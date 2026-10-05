@@ -1,4 +1,4 @@
-import type { AccountView } from '@hated/db';
+import type { AccountView, MatchSummary } from '@hated/db';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, type ApiServices } from '../src/app.js';
@@ -224,9 +224,15 @@ describe('GET /home', () => {
     const res = await app({
       getAccount: async () => ({ ...ACCOUNT, profile: { ...ACCOUNT.profile!, isActive: false } }),
       getLatestResult: async () => ({ status: 'none' }),
+      listMatches: async () => [summary({ unread: 2 }), summary({ unread: 1 })],
     }).request('/home', { headers: bearer });
 
-    expect(await res.json()).toEqual({ nextRoundAt: '2026-10-11T09:00:00.000Z', isActive: false, result: { status: 'none' } });
+    expect(await res.json()).toEqual({
+      nextRoundAt: '2026-10-11T09:00:00.000Z',
+      isActive: false,
+      result: { status: 'none' },
+      unreadTotal: 3,
+    });
   });
 });
 
@@ -374,5 +380,52 @@ describe('per-IP limits on sign-in', () => {
       expect((await a.request('/auth/verify', send('POST', { verificationId: `v${i}`, code: '000000' }))).status).toBe(401);
     }
     expect((await a.request('/auth/verify', send('POST', { verificationId: 'v21', code: '000000' }))).status).toBe(429);
+  });
+});
+
+function summary(overrides: Partial<MatchSummary> = {}): MatchSummary {
+  return {
+    matchId: 'm1',
+    roundId: 'r1',
+    publishedAt: NOW.toISOString(),
+    partner: { displayName: 'Maya', age: 23, institution: 'Victoria University' },
+    saidHello: true,
+    mutual: true,
+    passed: false,
+    lastMessage: null,
+    unread: 0,
+    ...overrides,
+  };
+}
+
+describe('match history and reports', () => {
+  it('lists matches', async () => {
+    const res = await app({ listMatches: async () => [summary()] }).request('/matches', { headers: bearer });
+    expect(await res.json()).toEqual({ matches: [summary()] });
+  });
+
+  it('reports a match, mapping refusals', async () => {
+    let seen: unknown;
+    const ok = await app({
+      reportMatch: async (_userId, matchId, input) => {
+        seen = { matchId, ...input };
+        return { ok: true };
+      },
+    }).request('/matches/m1/report', send('POST', { reason: 'harassment', details: 'rude' }, bearer));
+    expect(ok.status).toBe(204);
+    expect(seen).toEqual({ matchId: 'm1', reason: 'harassment', details: 'rude' });
+
+    const invalid = await app({ reportMatch: async () => ({ ok: false, reason: 'invalid', problem: 'Choose a reason.' }) }).request(
+      '/matches/m1/report',
+      send('POST', { reason: 'boring' }, bearer),
+    );
+    expect(invalid.status).toBe(422);
+    expect(await invalid.json()).toEqual({ error: 'invalid', problems: ['Choose a reason.'] });
+
+    const missing = await app({ reportMatch: async () => ({ ok: false, reason: 'not-found' }) }).request(
+      '/matches/m1/report',
+      send('POST', { reason: 'spam' }, bearer),
+    );
+    expect(missing.status).toBe(404);
   });
 });
