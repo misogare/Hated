@@ -47,6 +47,31 @@ export {
 } from './sign-in.js';
 
 export {
+  MIN_AGE,
+  ageOn,
+  getAccount,
+  saveProfile,
+  setProfileActive,
+  validateProfileInput,
+  type AccountView,
+  type ProfileInput,
+  type SaveProfileResult,
+} from './profiles.js';
+
+export {
+  getActiveQuestionnaire,
+  getAnswers,
+  getDesires,
+  saveAnswers,
+  saveDesires,
+  type AnswerValue,
+  type DesireInput,
+  type QuestionView,
+  type QuestionnaireView,
+  type SaveResult,
+} from './answers.js';
+
+export {
   findInstitutionForEmail,
   normalizeEmail,
   requestVerificationCode,
