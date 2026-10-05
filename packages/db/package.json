@@ -27,6 +27,7 @@
     "seed": "prisma db seed",
     "round": "tsx src/cli.ts",
     "round:inspect": "tsx src/inspect.ts",
+    "compare": "tsx src/compare.ts",
     "studio": "prisma studio",
     "test": "vitest run",
     "test:watch": "vitest"

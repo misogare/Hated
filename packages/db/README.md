@@ -34,7 +34,8 @@ only the storage shape.
 
 Other scripts: `generate` (regenerate the client), `push` (schema → DB without a
 migration), `studio`, `migrate:deploy`, `round` (run one match round — see
-below), `round:inspect` (read one back), `typecheck`.
+below), `round:inspect` (read one back), `compare` (fairness objectives
+side by side), `typecheck`.
 
 ### Seed data
 
@@ -203,6 +204,36 @@ npm run round:inspect -- <id1> <id2> --json
 A missing id prints an error and exits non-zero. The underlying loader,
 `getRoundReport(prisma, roundId)`, is exported too (returns `null` for an
 unknown id), so an API route can reuse it instead of the CLI.
+
+## Comparing fairness objectives
+
+`npm run compare` runs the stored population through every fairness objective and
+prints them side by side. Match rate is identical across objectives (by the Rural
+Hospitals theorem every stable matching matches the same people), so the table
+isolates equitability: which objective gives the two sides the most even outcome,
+and how much the rotation search improved on plain Gale-Shapley.
+
+```bash
+# from the repo root
+npm run compare -- --seed 42
+npm run compare -- --objectives egalitarian,min-regret --json
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--objectives <a,b,c>` | objectives to compare (default: all five) |
+| `--seed <n>` | RNG seed for the fairness search (default `42`) |
+| `--topK <n>` / `--minScore <n>` | FirstDate knobs (defaults `32` / `0.35`) |
+| `--latticeSample <n>` | stable matchings sampled per objective (default `128`) |
+| `--exhaustive <n>` / `--restarts <n>` / `--randomSteps <n>` | fairness-search effort |
+| `--ids <a,b,c>` / `--include-inactive` | population selection, as elsewhere |
+| `--json` | emit the rows as JSON |
+
+The columns are `match%`, `meanCost`, `worst`, `gap`, `firstCh`, `improve`,
+`span`, `range`, `exRot`, and `depth`; the footer names the objective with the
+smallest side gap and the one with the lowest mean cost. It reuses the engine's
+`runSweep` with a single `(topK, minScore)` cell, so the numbers match
+`@hated/core`'s.
 
 ## Using the client
 
