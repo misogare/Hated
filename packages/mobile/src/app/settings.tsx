@@ -2,13 +2,14 @@ import type { NotificationPrefs } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { describeError } from '@/api/client';
+import { ApiError, describeError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { BackButton, NightSwitch, Notice } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Eyebrow, Title } from '@/components/Text';
+import { saveExport } from '@/save-export';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
@@ -28,8 +29,8 @@ const ALL_ON: NotificationPrefs = { messages: true, hellos: true, rounds: true }
 
 /**
  * Settings, opened from home: the account, shortcuts to each editor, which
- * notifications to get, taking part in rounds, signing out, and deleting the
- * account.
+ * notifications to get, taking part in rounds, a copy of their data, signing
+ * out, and deleting the account.
  */
 export default function Settings() {
   const { account, api, refresh, signOut, deleteAccount } = useSession();
@@ -138,6 +139,8 @@ export default function Settings() {
           value={active}
           onChange={(on) => void toggleActive(on)}
         />
+        <View style={styles.divider} />
+        <DownloadData />
       </View>
 
       {error === null ? null : (
@@ -177,6 +180,59 @@ export default function Settings() {
 
       <DeleteAccount onDelete={deleteAccount} />
     </Screen>
+  );
+}
+
+/** A copy of everything HateD holds about the person: a download on the web, the share sheet on a phone. */
+function DownloadData() {
+  const { api } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  async function download() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const data = await api.exportData();
+      const fileName = `hated-data-${data.exportedAt.slice(0, 10)}.json`;
+      const saved = await saveExport(fileName, JSON.stringify(data, null, 2));
+      if (saved === 'downloaded') setResult({ kind: 'success', text: `Saved as ${fileName}.` });
+      if (saved === 'unavailable') setResult({ kind: 'error', text: "This device can't share files right now." });
+    } catch (caught) {
+      const minutes = caught instanceof ApiError && caught.code === 'rate-limited' ? Math.ceil((caught.body?.retryAfterSeconds ?? 3600) / 60) : null;
+      setResult({
+        kind: 'error',
+        text: minutes === null ? describeError(caught) : `You can download your data five times an hour. Try again in ${minutes} minutes.`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Download your data"
+        accessibilityState={{ busy }}
+        disabled={busy}
+        onPress={() => void download()}
+        style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+      >
+        <View style={styles.linkText}>
+          <Text style={styles.linkLabel}>Download your data</Text>
+          <Text style={styles.linkHint}>A copy of everything HateD holds about you, as a file</Text>
+        </View>
+        {busy ? <ActivityIndicator color={night.honey} /> : <Feather name="download" size={20} color={night.muted} />}
+      </Pressable>
+      {result === null ? null : (
+        <View style={styles.downloadResult}>
+          <Notice tone="night" kind={result.kind}>
+            {result.text}
+          </Notice>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -275,6 +331,7 @@ const styles = StyleSheet.create({
   toggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   footnote: { marginTop: 8, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: night.muted },
   error: { marginTop: 16 },
+  downloadResult: { marginTop: -4, marginBottom: 14 },
   signOut: { marginTop: 32, gap: 8 },
   confirmTitle: { marginTop: 18, fontFamily: fonts.displayBold, fontSize: 19, color: night.text },
   confirmBody: { marginTop: 6, fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: night.muted },

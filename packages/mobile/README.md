@@ -67,6 +67,10 @@ Settings holds the person's privacy choices:
 - **Take part in rounds:** off leaves them out of matching until they turn it
   back on; matches and conversations stay. It's the same switch as home's "Sit
   this round out".
+- **Download your data:** a copy of everything HateD holds about them, as a
+  JSON file (`hated-data-<date>.json`). The browser downloads it; on a phone it
+  is written to the app's cache (`expo-file-system`) and handed to the share
+  sheet (`expo-sharing`), so it can go to Files, Drive or email. Five an hour.
 - **Delete my account:** after a second step that says what goes, the API
   erases the account and everything in it, and the welcome screen confirms it.
   Reports they made about someone else stay, without their name.

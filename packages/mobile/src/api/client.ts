@@ -43,6 +43,8 @@ export interface ApiClient {
   me(): Promise<Api.Account>;
   /** Erase the account and everything in it, for good. */
   deleteAccount(): Promise<void>;
+  /** Everything HateD holds about the person, as one document. */
+  exportData(): Promise<Api.DataExport>;
   /** Turn kinds of push notification on or off; returns all of them. */
   setNotifications(changes: Api.NotificationsRequest): Promise<Api.NotificationPrefs>;
   saveProfile(profile: Api.ProfileRequest): Promise<Api.Account>;
@@ -108,6 +110,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
       call('PUT', '/me/push-token', { token, platform } satisfies Api.PushTokenRequest),
     me: () => call('GET', '/me'),
     deleteAccount: () => call('DELETE', '/me'),
+    exportData: () => call('GET', '/me/export'),
     setNotifications: (changes) => call('PUT', '/me/notifications', changes),
     saveProfile: (profile) => call('PUT', '/me/profile', profile),
     setActive: (active) => call('PUT', '/me/active', { active } satisfies Api.ActiveRequest),
