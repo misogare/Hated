@@ -2,6 +2,7 @@
 
 import {
   createSession,
+  deleteAccount,
   getAccount,
   getActiveQuestionnaire,
   getAnswers,
@@ -22,6 +23,7 @@ import {
   saveProfile,
   sayHello,
   sendMessage,
+  setNotificationPrefs,
   setProfileActive,
   startSignIn,
   verifyCode,
@@ -57,5 +59,7 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     registerPushToken: (userId, token, platform) => registerPushToken(prisma, userId, token, platform),
     unregisterPushToken: (userId, token) => unregisterPushToken(prisma, userId, token),
     unregisterAllPushTokens: (userId) => unregisterAllPushTokens(prisma, userId),
+    setNotificationPrefs: (userId, changes) => setNotificationPrefs(prisma, userId, changes),
+    deleteAccount: (userId) => deleteAccount(prisma, userId),
   };
 }

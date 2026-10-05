@@ -15,6 +15,7 @@ import type {
   Notifier,
   MatchActionResult,
   NewSession,
+  NotificationPrefs,
   ProfileInput,
   RegisterPushTokenResult,
   ReportResult,
@@ -61,6 +62,10 @@ export interface ApiServices {
   registerPushToken(userId: string, token: string, platform: string): Promise<RegisterPushTokenResult>;
   unregisterPushToken(userId: string, token: string): Promise<void>;
   unregisterAllPushTokens(userId: string): Promise<void>;
+  /** Null if there is no such account. */
+  setNotificationPrefs(userId: string, changes: Partial<NotificationPrefs>): Promise<NotificationPrefs | null>;
+  /** Erase the account and everything in it. False if there was no such account. */
+  deleteAccount(userId: string): Promise<boolean>;
 }
 
 export interface ApiOptions {
@@ -114,6 +119,7 @@ const ProfileBody = z.object({
 const ActiveBody = z.object({ active: z.boolean() });
 const SignOutBody = z.object({ everywhere: z.boolean().optional(), pushToken: z.string().max(300).optional() });
 const PushTokenBody = z.object({ token: z.string().max(300), platform: z.string().max(20) });
+const NotificationsBody = z.strictObject({ messages: z.boolean().optional(), hellos: z.boolean().optional(), rounds: z.boolean().optional() });
 const Key = z.string().min(1).max(64);
 const AnswersBody = z.object({
   answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
@@ -259,6 +265,22 @@ export function createApp(options: ApiOptions): Hono<Env> {
     const account = await services.getAccount(userId);
     if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
     return c.json<Api.Account>(account);
+  });
+
+  app.put('/me/notifications', requireUser, async (c) => {
+    const body = await readBody(c, NotificationsBody);
+    if (!body.ok) return body.response;
+
+    const prefs = await services.setNotificationPrefs(c.get('userId'), body.value);
+    if (prefs === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
+    return c.json<Api.NotificationPrefs>(prefs);
+  });
+
+  // Erasure: the account and everything in it, for good. Every session goes
+  // with it, so this token stops working too.
+  app.delete('/me', requireUser, async (c) => {
+    await services.deleteAccount(c.get('userId'));
+    return c.body(null, 204);
   });
 
   app.put('/me/active', requireUser, async (c) => {

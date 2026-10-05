@@ -38,7 +38,9 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `POST /auth/verify` `{ verificationId, code }` | Exchange the code for a session token | 401 `invalid-code` with `attemptsRemaining`; 400 `expired` / `too-many-attempts` / … |
 | `POST /auth/sign-out` `{ everywhere?, pushToken? }` | End this device's session (and stop its notifications), or every session and every device | |
 | `PUT /me/push-token` `{ token, platform }` | This device can receive push notifications | 422 `invalid` |
-| `GET /me` | The account, profile and onboarding progress | |
+| `GET /me` | The account, profile, onboarding progress and notification settings | |
+| `DELETE /me` | Delete the account and everything in it, for good (see [Deleting an account](#deleting-an-account)) | 204 |
+| `PUT /me/notifications` `{ messages?, hellos?, rounds? }` | Turn each kind of push notification on or off, on every device; kinds left out stay as they are | 400 for anything else |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |
 | `GET /questionnaire` | The active questionnaire, in order | |
@@ -86,8 +88,19 @@ Sent through Expo's push service to every device a person has registered:
 - **A round published:** everyone in it hears that their result is in (from the
   automatic scheduler, or `npm run round -- --status PUBLISHED --notify`).
 
-Sending never slows down or fails the request that caused it. Devices Expo
-reports as gone are forgotten, and signing out removes the device's token.
+Each kind can be turned off (`PUT /me/notifications`), for all of a person's
+devices at once. Sending never slows down or fails the request that caused it.
+Devices Expo reports as gone are forgotten, and signing out removes the
+device's token.
+
+## Deleting an account
+
+`DELETE /me` erases the person for good: profile, answers, sessions, devices,
+email verifications, matches and every message in them, and reports about
+them. Every session ends with it, so the token used for the request stops
+working. Their matches disappear for the other person. Reports they made about
+someone else stay, without their name, for the team to act on. See
+`packages/db/README.md` for exactly what is kept and why.
 
 ## Sessions
 

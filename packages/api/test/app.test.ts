@@ -522,3 +522,40 @@ describe('push notifications', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('privacy', () => {
+  it('turns notification kinds on and off, leaving the rest as they are', async () => {
+    let seen: unknown;
+    const res = await app({
+      setNotificationPrefs: async (userId, changes) => {
+        seen = { userId, changes };
+        return { messages: true, hellos: true, rounds: false };
+      },
+    }).request('/me/notifications', send('PUT', { rounds: false }, bearer));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ messages: true, hellos: true, rounds: false });
+    expect(seen).toEqual({ userId: 'user-1', changes: { rounds: false } });
+  });
+
+  it('refuses notification settings it does not know', async () => {
+    const a = app({ setNotificationPrefs: async () => ({ messages: true, hellos: true, rounds: true }) });
+    expect((await a.request('/me/notifications', send('PUT', { marketing: false }, bearer))).status).toBe(400);
+    expect((await a.request('/me/notifications', send('PUT', { messages: 'no' }, bearer))).status).toBe(400);
+  });
+
+  it('deletes the signed-in account, and only with a session', async () => {
+    const deleted: string[] = [];
+    const a = app({
+      deleteAccount: async (userId) => {
+        deleted.push(userId);
+        return true;
+      },
+    });
+
+    expect((await a.request('/me', { method: 'DELETE' })).status).toBe(401);
+    const res = await a.request('/me', send('DELETE', undefined, bearer));
+    expect(res.status).toBe(204);
+    expect(deleted).toEqual(['user-1']);
+  });
+});

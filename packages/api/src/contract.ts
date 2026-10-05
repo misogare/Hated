@@ -74,7 +74,22 @@ export interface Account {
     isActive: boolean;
   } | null;
   onboarding: { profile: boolean; answers: boolean };
+  /** Which push notifications they want. */
+  notifications: NotificationPrefs;
 }
+
+/** Each kind of push notification, on or off (for every device). */
+export interface NotificationPrefs {
+  /** A new message in a conversation. */
+  messages: boolean;
+  /** The other person said hello back, so the conversation is open. */
+  hellos: boolean;
+  /** A round's result is in. */
+  rounds: boolean;
+}
+
+/** Kinds left out stay as they are. */
+export type NotificationsRequest = Partial<NotificationPrefs>;
 
 export interface ProfileRequest {
   displayName: string;
