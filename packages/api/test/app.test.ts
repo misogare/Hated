@@ -332,3 +332,47 @@ describe('chat', () => {
     expect((await app().request('/matches/m1/messages')).status).toBe(401);
   });
 });
+
+describe('per-IP limits on sign-in', () => {
+  function appFrom(ip: { current: string }, overrides: Partial<ApiServices> = {}) {
+    return createApp({
+      services: services({ resolveSession: async () => null, ...overrides }),
+      schedule: parseSchedule('SUN', '20:00', 'Australia/Melbourne'),
+      now: () => NOW,
+      clientIp: () => ip.current,
+    });
+  }
+
+  it('stops one address requesting codes for many inboxes, without affecting others', async () => {
+    const ip = { current: '203.0.113.7' };
+    let sent = 0;
+    const a = appFrom(ip, {
+      startSignIn: async (email) => {
+        sent++;
+        return { ok: true, verificationId: 'v', email, expiresAt: NOW };
+      },
+    });
+
+    for (let i = 0; i < 5; i++) {
+      expect((await a.request('/auth/code', send('POST', { email: `student${i}@vu.edu.au` }))).status).toBe(200);
+    }
+    const sixth = await a.request('/auth/code', send('POST', { email: 'student6@vu.edu.au' }));
+    expect(sixth.status).toBe(429);
+    expect(await sixth.json()).toEqual({ error: 'rate-limited', retryAfterSeconds: 60 });
+    expect(sixth.headers.get('Retry-After')).toBe('60');
+    expect(sent).toBe(5);
+
+    ip.current = '198.51.100.20';
+    expect((await a.request('/auth/code', send('POST', { email: 'other@vu.edu.au' }))).status).toBe(200);
+  });
+
+  it('limits code guessing per address', async () => {
+    const ip = { current: '203.0.113.7' };
+    const a = appFrom(ip, { verifyCode: async () => ({ ok: false, reason: 'invalid-code', attemptsRemaining: 4 }) });
+
+    for (let i = 0; i < 20; i++) {
+      expect((await a.request('/auth/verify', send('POST', { verificationId: `v${i}`, code: '000000' }))).status).toBe(401);
+    }
+    expect((await a.request('/auth/verify', send('POST', { verificationId: 'v21', code: '000000' }))).status).toBe(429);
+  });
+});

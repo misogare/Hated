@@ -28,6 +28,7 @@ import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 
 import type * as Api from './contract.js';
+import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { nextRoundAt, type RoundSchedule } from './schedule.js';
 
 export interface ApiServices {
@@ -58,7 +59,27 @@ export interface ApiOptions {
   schedule: RoundSchedule;
   /** Injectable clock, for tests. */
   now?: () => Date;
+  /**
+   * The caller's IP, for per-IP limits on sign-in. The server reads the socket
+   * (or X-Forwarded-For behind a trusted proxy); without one, every caller
+   * shares a single bucket.
+   */
+  clientIp?: (c: Context) => string;
 }
+
+/**
+ * Per-IP limits on sign-in. Codes: enough for a household or a shared campus
+ * network, far too few to walk through many addresses. Verifying: generous for
+ * typos, tight enough to stop guessing across many codes.
+ */
+const SEND_CODE_LIMITS = [
+  { limit: 5, windowMs: 60_000 },
+  { limit: 30, windowMs: 60 * 60_000 },
+];
+const VERIFY_CODE_LIMITS = [
+  { limit: 20, windowMs: 60_000 },
+  { limit: 100, windowMs: 60 * 60_000 },
+];
 
 type Env = { Variables: { userId: string; token: string } };
 
@@ -88,7 +109,20 @@ const DesiresBody = z.object({
 export function createApp(options: ApiOptions): Hono<Env> {
   const { services, schedule } = options;
   const now = options.now ?? (() => new Date());
+  const clientIp = options.clientIp ?? (() => 'unknown');
+  const clock = () => now().getTime();
+  const sendCodeLimiter = createRateLimiter(SEND_CODE_LIMITS, clock);
+  const verifyCodeLimiter = createRateLimiter(VERIFY_CODE_LIMITS, clock);
   const app = new Hono<Env>();
+
+  /** 429 with Retry-After when this caller is over the limit, else null. */
+  function limited(c: Context, limiter: RateLimiter): Response | null {
+    const result = limiter.check(clientIp(c));
+    if (result.ok) return null;
+    const retryAfterSeconds = Math.ceil(result.retryAfterMs / 1000);
+    c.header('Retry-After', String(retryAfterSeconds));
+    return c.json<Api.ApiError>({ error: 'rate-limited', retryAfterSeconds }, 429);
+  }
 
   // Sessions are bearer tokens, never cookies, so any origin may call (Expo web in dev).
   app.use('*', cors());
@@ -114,6 +148,8 @@ export function createApp(options: ApiOptions): Hono<Env> {
   // --- Sign-in ---------------------------------------------------------------
 
   app.post('/auth/code', async (c) => {
+    const tooMany = limited(c, sendCodeLimiter);
+    if (tooMany !== null) return tooMany;
     const body = await readBody(c, SendCodeBody);
     if (!body.ok) return body.response;
 
@@ -140,6 +176,8 @@ export function createApp(options: ApiOptions): Hono<Env> {
   });
 
   app.post('/auth/verify', async (c) => {
+    const tooMany = limited(c, verifyCodeLimiter);
+    if (tooMany !== null) return tooMany;
     const body = await readBody(c, VerifyCodeBody);
     if (!body.ok) return body.response;
 

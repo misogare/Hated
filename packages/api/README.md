@@ -21,6 +21,7 @@ Node 20.19+ (Prisma 7).
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | `0.0.0.0` lets a phone on the same Wi-Fi reach it. |
 | `ROUND_DAY` / `ROUND_TIME` / `ROUND_TIMEZONE` | `SUN` / `20:00` / `Australia/Melbourne` | When rounds close: wall-clock time in that zone, steady across daylight saving. |
 | `ROUND_AUTORUN` | `true` | Run each round automatically at its slot. `false` leaves it to `npm run round`. |
+| `TRUST_PROXY` | `false` | `true` behind a reverse proxy, so per-IP limits read `X-Forwarded-For`. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
 instead of emailed, which is handy for local development.
@@ -32,7 +33,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 
 | Route | Does | Notable responses |
 | --- | --- | --- |
-| `POST /auth/code` `{ email }` | Email a sign-in code; first use creates the account | 422 `unsupported-domain`, 429 `rate-limited` (+ `Retry-After`), 502 `delivery-failed` |
+| `POST /auth/code` `{ email }` | Email a sign-in code; first use creates the account | 422 `unsupported-domain`, 429 `rate-limited` (+ `Retry-After`; per address and per IP), 502 `delivery-failed` |
 | `POST /auth/verify` `{ verificationId, code }` | Exchange the code for a session token | 401 `invalid-code` with `attemptsRemaining`; 400 `expired` / `too-many-attempts` / … |
 | `POST /auth/sign-out` `{ everywhere? }` | End this device's session, or every session | |
 | `GET /me` | The account, profile and onboarding progress | |
@@ -58,6 +59,18 @@ at a slot, it runs that slot when it starts again, as long as it is less than
 12 hours late. Each slot is stored on its round with a unique constraint, so
 it runs exactly once even with several API servers running the scheduler. The
 log shows each run as `[rounds] round <slot>: matched N of M people`.
+
+## Limits on sign-in
+
+Each code is a real email from a capped plan, and each one is another chance to
+guess, so sign-in is limited twice over:
+
+- **Per address** (in the database): one code a minute and 10 a day.
+- **Per IP** (in this process): 5 code requests a minute and 30 an hour, and 20
+  code checks a minute and 100 an hour, which stops one machine walking through
+  many inboxes or guessing across many codes.
+
+Over a limit, the answer is 429 with `Retry-After`.
 
 ## Sessions
 
