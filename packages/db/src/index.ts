@@ -72,6 +72,17 @@ export {
 } from './answers.js';
 
 export {
+  explainMatch,
+  getLatestResult,
+  passMatch,
+  sayHello,
+  type MatchActionResult,
+  type MatchView,
+  type RoundResultView,
+  type TraitSnapshot,
+} from './results.js';
+
+export {
   findInstitutionForEmail,
   normalizeEmail,
   requestVerificationCode,
