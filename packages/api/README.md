@@ -21,6 +21,7 @@ Node 20.19+ (Prisma 7).
 | `AUTH_SECRET` | (required) | HMAC key for session tokens, 32+ characters. Rotating it signs everyone out. |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | `0.0.0.0` lets a phone on the same Wi-Fi reach it. |
 | `ROUND_DAY` / `ROUND_TIME` / `ROUND_TIMEZONE` | `SUN` / `20:00` / `Australia/Melbourne` | When rounds close: wall-clock time in that zone, steady across daylight saving. |
+| `ROUND_AUTORUN` | `true` | Run each round automatically at its slot. `false` leaves it to `npm run round`. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
 instead of emailed, which is handy for local development.
@@ -47,6 +48,15 @@ Everything except `/health` and `/auth/*` needs `Authorization: Bearer <token>`.
 
 Errors are always `{ error, problems?, attemptsRemaining?, retryAfterSeconds? }`;
 internal errors are logged and returned as a bare `{ error: "internal" }`.
+
+## Automatic rounds
+
+When each slot arrives, the API matches everyone who is in that round and
+publishes the result, so people see it straight away. If the server was down
+at a slot, it runs that slot when it starts again, as long as it is less than
+12 hours late. Each slot is stored on its round with a unique constraint, so
+it runs exactly once even with several API servers running the scheduler. The
+log shows each run as `[rounds] round <slot>: matched N of M people`.
 
 ## Sessions
 

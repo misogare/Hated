@@ -31,6 +31,22 @@ export function nextRoundAt(now: Date, schedule: RoundSchedule): Date {
   throw new Error('no round slot found');
 }
 
+/** The latest slot at or before `now`: the one a restarted server may still owe. */
+export function previousRoundAt(now: Date, schedule: RoundSchedule): Date {
+  const today = zonedParts(now, schedule.timeZone);
+  for (let offset = 0; offset <= 7; offset++) {
+    const day = new Date(Date.UTC(today.year, today.month - 1, today.day - offset));
+    if (day.getUTCDay() !== schedule.weekday) continue;
+    const candidate = zonedTimeToUtc(
+      { year: day.getUTCFullYear(), month: day.getUTCMonth() + 1, day: day.getUTCDate(), hour: schedule.hour, minute: schedule.minute },
+      schedule.timeZone,
+    );
+    if (candidate.getTime() <= now.getTime()) return candidate;
+  }
+  // Unreachable: some day within the last 8 has the weekday and lies at or before now.
+  throw new Error('no round slot found');
+}
+
 /** Parse `SUN 20:00`-style settings; throws with a readable message on bad input. */
 export function parseSchedule(day: string, time: string, timeZone: string): RoundSchedule {
   const weekday = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].indexOf(day.trim().slice(0, 3).toUpperCase());
