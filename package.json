@@ -7,8 +7,9 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "tsc -b",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "tsc -b --emitDeclarationOnly",
     "sim": "npm run sim -w @hated/core --"
   },
   "engines": {

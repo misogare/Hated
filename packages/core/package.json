@@ -16,8 +16,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --emitDeclarationOnly",
     "test": "vitest run",
     "test:watch": "vitest",
     "sim": "tsx src/sim/cli.ts"
