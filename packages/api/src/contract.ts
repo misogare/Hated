@@ -41,6 +41,15 @@ export interface VerifyCodeRequest {
 /** `POST /auth/sign-out`: this device, or with `everywhere`, every device. */
 export interface SignOutRequest {
   everywhere?: boolean;
+  /** This device's push token, so it stops receiving notifications. */
+  pushToken?: string;
+}
+
+/** `PUT /me/push-token`: this device can receive push notifications. */
+export interface PushTokenRequest {
+  /** An Expo push token, `ExponentPushToken[...]`. */
+  token: string;
+  platform: 'ios' | 'android';
 }
 
 export interface SessionResponse {

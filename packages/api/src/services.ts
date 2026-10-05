@@ -10,10 +10,13 @@ import {
   listMatches,
   listMessages,
   passMatch,
+  registerPushToken,
   reportMatch,
   resolveSession,
   revokeAllSessions,
   revokeSession,
+  unregisterAllPushTokens,
+  unregisterPushToken,
   saveAnswers,
   saveDesires,
   saveProfile,
@@ -51,5 +54,8 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     sendMessage: (userId, matchId, body) => sendMessage(prisma, userId, matchId, body),
     listMatches: (userId) => listMatches(prisma, userId),
     reportMatch: (userId, matchId, input) => reportMatch(prisma, userId, matchId, input),
+    registerPushToken: (userId, token, platform) => registerPushToken(prisma, userId, token, platform),
+    unregisterPushToken: (userId, token) => unregisterPushToken(prisma, userId, token),
+    unregisterAllPushTokens: (userId) => unregisterAllPushTokens(prisma, userId),
   };
 }

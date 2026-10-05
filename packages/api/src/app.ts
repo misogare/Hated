@@ -12,9 +12,11 @@ import type {
   DesireInput,
   ListMessagesResult,
   MatchSummary,
+  Notifier,
   MatchActionResult,
   NewSession,
   ProfileInput,
+  RegisterPushTokenResult,
   ReportResult,
   QuestionnaireView,
   RoundResultView,
@@ -56,6 +58,9 @@ export interface ApiServices {
   sendMessage(userId: string, matchId: string, body: string): Promise<SendMessageResult>;
   listMatches(userId: string): Promise<MatchSummary[]>;
   reportMatch(userId: string, matchId: string, input: { reason: string; details?: string }): Promise<ReportResult>;
+  registerPushToken(userId: string, token: string, platform: string): Promise<RegisterPushTokenResult>;
+  unregisterPushToken(userId: string, token: string): Promise<void>;
+  unregisterAllPushTokens(userId: string): Promise<void>;
 }
 
 export interface ApiOptions {
@@ -69,7 +74,15 @@ export interface ApiOptions {
    * shares a single bucket.
    */
   clientIp?: (c: Context) => string;
+  /** Sends push notifications for messages and mutual hellos. Default: none. */
+  notifier?: Notifier;
 }
+
+const SILENT: Notifier = {
+  messageSent: async () => undefined,
+  becameMutual: async () => undefined,
+  roundPublished: async () => undefined,
+};
 
 /**
  * Per-IP limits on sign-in. Codes: enough for a household or a shared campus
@@ -99,7 +112,8 @@ const ProfileBody = z.object({
   seeking: z.array(z.string().max(100)).max(20),
 });
 const ActiveBody = z.object({ active: z.boolean() });
-const SignOutBody = z.object({ everywhere: z.boolean().optional() });
+const SignOutBody = z.object({ everywhere: z.boolean().optional(), pushToken: z.string().max(300).optional() });
+const PushTokenBody = z.object({ token: z.string().max(300), platform: z.string().max(20) });
 const Key = z.string().min(1).max(64);
 const AnswersBody = z.object({
   answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
@@ -116,6 +130,7 @@ export function createApp(options: ApiOptions): Hono<Env> {
   const { services, schedule } = options;
   const now = options.now ?? (() => new Date());
   const clientIp = options.clientIp ?? (() => 'unknown');
+  const notifier = options.notifier ?? SILENT;
   const clock = () => now().getTime();
   const sendCodeLimiter = createRateLimiter(SEND_CODE_LIMITS, clock);
   const verifyCodeLimiter = createRateLimiter(VERIFY_CODE_LIMITS, clock);
@@ -203,8 +218,23 @@ export function createApp(options: ApiOptions): Hono<Env> {
     const parsed = SignOutBody.safeParse(raw.trim().length === 0 ? {} : safeJson(raw));
     if (!parsed.success) return c.json<Api.ApiError>({ error: 'invalid-body' }, 400);
 
-    if (parsed.data.everywhere === true) await services.revokeAllSessions(c.get('userId'));
-    else await services.revokeSession(c.get('token'));
+    const userId = c.get('userId');
+    if (parsed.data.everywhere === true) {
+      await services.revokeAllSessions(userId);
+      await services.unregisterAllPushTokens(userId);
+    } else {
+      await services.revokeSession(c.get('token'));
+      if (parsed.data.pushToken !== undefined) await services.unregisterPushToken(userId, parsed.data.pushToken);
+    }
+    return c.body(null, 204);
+  });
+
+  app.put('/me/push-token', requireUser, async (c) => {
+    const body = await readBody(c, PushTokenBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.registerPushToken(c.get('userId'), body.value.token, body.value.platform);
+    if (!result.ok) return c.json<Api.ApiError>({ error: 'invalid', problems: ['Not an Expo push token for iOS or Android.'] }, 422);
     return c.body(null, 204);
   });
 
@@ -302,8 +332,12 @@ export function createApp(options: ApiOptions): Hono<Env> {
   });
 
   app.post('/matches/:matchId/hello', requireUser, async (c) => {
-    const result = await services.sayHello(c.get('userId'), c.req.param('matchId'));
+    const userId = c.get('userId');
+    const matchId = c.req.param('matchId');
+    const result = await services.sayHello(userId, matchId);
     if (!result.ok) return matchActionError(c, result.reason);
+    // Notifications never hold up (or fail) the response.
+    if (result.becameMutual === true) void notifier.becameMutual(matchId, userId);
     return c.json<Api.HelloResponse>({ mutual: result.mutual });
   });
 
@@ -326,8 +360,13 @@ export function createApp(options: ApiOptions): Hono<Env> {
     const body = await readBody(c, MessageBody);
     if (!body.ok) return body.response;
 
-    const result = await services.sendMessage(c.get('userId'), c.req.param('matchId'), body.value.body);
-    if (result.ok) return c.json<Api.SendMessageResponse>({ message: result.message }, 201);
+    const userId = c.get('userId');
+    const matchId = c.req.param('matchId');
+    const result = await services.sendMessage(userId, matchId, body.value.body);
+    if (result.ok) {
+      void notifier.messageSent(matchId, userId);
+      return c.json<Api.SendMessageResponse>({ message: result.message }, 201);
+    }
     if (result.reason === 'invalid') return c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
     return chatClosed(c, result.reason);
   });

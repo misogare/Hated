@@ -22,6 +22,7 @@ Node 20.19+ (Prisma 7).
 | `ROUND_DAY` / `ROUND_TIME` / `ROUND_TIMEZONE` | `SUN` / `20:00` / `Australia/Melbourne` | When rounds close: wall-clock time in that zone, steady across daylight saving. |
 | `ROUND_AUTORUN` | `true` | Run each round automatically at its slot. `false` leaves it to `npm run round`. |
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy, so per-IP limits read `X-Forwarded-For`. |
+| `EXPO_ACCESS_TOKEN` | (none) | Only if the Expo project has enhanced push security on. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
 instead of emailed, which is handy for local development.
@@ -35,7 +36,8 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | --- | --- | --- |
 | `POST /auth/code` `{ email }` | Email a sign-in code; first use creates the account | 422 `unsupported-domain`, 429 `rate-limited` (+ `Retry-After`; per address and per IP), 502 `delivery-failed` |
 | `POST /auth/verify` `{ verificationId, code }` | Exchange the code for a session token | 401 `invalid-code` with `attemptsRemaining`; 400 `expired` / `too-many-attempts` / … |
-| `POST /auth/sign-out` `{ everywhere? }` | End this device's session, or every session | |
+| `POST /auth/sign-out` `{ everywhere?, pushToken? }` | End this device's session (and stop its notifications), or every session and every device | |
+| `PUT /me/push-token` `{ token, platform }` | This device can receive push notifications | 422 `invalid` |
 | `GET /me` | The account, profile and onboarding progress | |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |
@@ -73,6 +75,19 @@ guess, so sign-in is limited twice over:
   many inboxes or guessing across many codes.
 
 Over a limit, the answer is 429 with `Retry-After`.
+
+## Push notifications
+
+Sent through Expo's push service to every device a person has registered:
+
+- **A new message:** "New message from Maya", never the message itself.
+- **Both said hello:** the person who said hello first hears that the
+  conversation is open. A one-sided hello is never announced.
+- **A round published:** everyone in it hears that their result is in (from the
+  automatic scheduler, or `npm run round -- --status PUBLISHED --notify`).
+
+Sending never slows down or fails the request that caused it. Devices Expo
+reports as gone are forgotten, and signing out removes the device's token.
 
 ## Sessions
 

@@ -1,4 +1,4 @@
-import type { AccountView, MatchSummary } from '@hated/db';
+import type { AccountView, MatchSummary, Notifier } from '@hated/db';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, type ApiServices } from '../src/app.js';
@@ -140,11 +140,14 @@ describe('authentication', () => {
         revoked.push(`all:${userId}`);
         return 2;
       },
+      unregisterAllPushTokens: async (userId) => {
+        revoked.push(`devices:${userId}`);
+      },
     });
 
     expect((await a.request('/auth/sign-out', { method: 'POST', headers: bearer })).status).toBe(204);
     expect((await a.request('/auth/sign-out', send('POST', { everywhere: true }, bearer))).status).toBe(204);
-    expect(revoked).toEqual([`device:${TOKEN}`, 'all:user-1']);
+    expect(revoked).toEqual([`device:${TOKEN}`, 'all:user-1', 'devices:user-1']);
     expect((await a.request('/auth/sign-out', send('POST', { everywhere: 'yes' }, bearer))).status).toBe(400);
     expect((await a.request('/auth/sign-out', { method: 'POST' })).status).toBe(401);
   });
@@ -427,5 +430,94 @@ describe('match history and reports', () => {
       send('POST', { reason: 'spam' }, bearer),
     );
     expect(missing.status).toBe(404);
+  });
+});
+
+describe('push notifications', () => {
+  function recordingNotifier() {
+    const calls: string[] = [];
+    const notifier: Notifier = {
+      messageSent: async (matchId, userId) => {
+        calls.push(`message ${matchId} from ${userId}`);
+      },
+      becameMutual: async (matchId, userId) => {
+        calls.push(`mutual ${matchId} by ${userId}`);
+      },
+      roundPublished: async (roundId) => {
+        calls.push(`round ${roundId}`);
+      },
+    };
+    return { calls, notifier };
+  }
+
+  function appWith(notifier: Notifier, overrides: Partial<ApiServices>) {
+    return createApp({
+      services: services({ resolveSession: async (token) => (token === TOKEN ? 'user-1' : null), ...overrides }),
+      schedule: parseSchedule('SUN', '20:00', 'Australia/Melbourne'),
+      now: () => NOW,
+      notifier,
+    });
+  }
+
+  it('registers this device, and refuses a token that is not an Expo one', async () => {
+    let seen: unknown;
+    const ok = await app({
+      registerPushToken: async (userId, token, platform) => {
+        seen = { userId, token, platform };
+        return { ok: true };
+      },
+    }).request('/me/push-token', send('PUT', { token: 'ExponentPushToken[abc]', platform: 'ios' }, bearer));
+    expect(ok.status).toBe(204);
+    expect(seen).toEqual({ userId: 'user-1', token: 'ExponentPushToken[abc]', platform: 'ios' });
+
+    const bad = await app({ registerPushToken: async () => ({ ok: false, reason: 'invalid' }) }).request(
+      '/me/push-token',
+      send('PUT', { token: 'nope', platform: 'ios' }, bearer),
+    );
+    expect(bad.status).toBe(422);
+  });
+
+  it("forgets this device's token when it signs out", async () => {
+    const forgotten: string[] = [];
+    const res = await app({
+      revokeSession: async () => undefined,
+      unregisterPushToken: async (userId, token) => {
+        forgotten.push(`${userId} ${token}`);
+      },
+    }).request('/auth/sign-out', send('POST', { pushToken: 'ExponentPushToken[abc]' }, bearer));
+
+    expect(res.status).toBe(204);
+    expect(forgotten).toEqual(['user-1 ExponentPushToken[abc]']);
+  });
+
+  it('notifies the other person about a new message', async () => {
+    const { calls, notifier } = recordingNotifier();
+    await appWith(notifier, {
+      sendMessage: async (_u, _m, body) => ({ ok: true, message: { id: 'msg1', body, sentAt: NOW.toISOString(), mine: true } }),
+    }).request('/matches/m1/messages', send('POST', { body: 'Hi' }, bearer));
+
+    expect(calls).toEqual(['message m1 from user-1']);
+  });
+
+  it('notifies once, when a hello makes the match mutual', async () => {
+    const { calls, notifier } = recordingNotifier();
+    const results = [
+      { ok: true as const, mutual: false, becameMutual: false },
+      { ok: true as const, mutual: true, becameMutual: true },
+      { ok: true as const, mutual: true, becameMutual: false },
+    ];
+    const a = appWith(notifier, { sayHello: async () => results.shift()! });
+    for (let i = 0; i < 3; i++) await a.request('/matches/m1/hello', send('POST', undefined, bearer));
+
+    expect(calls).toEqual(['mutual m1 by user-1']);
+  });
+
+  it('sends nothing when the message was refused', async () => {
+    const { calls, notifier } = recordingNotifier();
+    await appWith(notifier, { sendMessage: async () => ({ ok: false, reason: 'passed' }) }).request(
+      '/matches/m1/messages',
+      send('POST', { body: 'Hi' }, bearer),
+    );
+    expect(calls).toEqual([]);
   });
 });

@@ -8,14 +8,23 @@
  * All optional: PORT (3000); HOST (0.0.0.0, so a phone on the same network can
  * reach it); ROUND_DAY / ROUND_TIME / ROUND_TIMEZONE for when rounds close
  * (SUN, 20:00, Australia/Melbourne); ROUND_AUTORUN=false to stop this server
- * running rounds itself; and TRUST_PROXY=true behind a reverse proxy, so the
- * per-IP sign-in limits read X-Forwarded-For.
+ * running rounds itself; TRUST_PROXY=true behind a reverse proxy, so the
+ * per-IP sign-in limits read X-Forwarded-For; and EXPO_ACCESS_TOKEN if the
+ * Expo project requires one for sending push notifications.
  */
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMailer, createPrismaClient, describeMailConfig, resolveMailConfig, runScheduledRound } from '@hated/db';
+import {
+  createExpoPushSender,
+  createMailer,
+  createNotifier,
+  createPrismaClient,
+  describeMailConfig,
+  resolveMailConfig,
+  runScheduledRound,
+} from '@hated/db';
 import { serve } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { config } from 'dotenv';
@@ -50,7 +59,13 @@ try {
 const trustProxy = (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true';
 
 const prisma = createPrismaClient();
+const notifier = createNotifier(
+  prisma,
+  createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined }),
+  { log: (line) => console.error(`[push] ${line}`) },
+);
 const app = createApp({
+  notifier,
   services: createDbServices(prisma, createMailer(mailConfig)),
   clientIp: (c) => {
     if (trustProxy) {
@@ -66,7 +81,11 @@ const autorun = (process.env.ROUND_AUTORUN ?? 'true').trim().toLowerCase() !== '
 const scheduler = autorun
   ? startRoundScheduler({
       schedule,
-      run: (slot) => runScheduledRound(prisma, slot),
+      run: async (slot) => {
+        const result = await runScheduledRound(prisma, slot);
+        if (result.ran) void notifier.roundPublished(result.roundId);
+        return result;
+      },
       log: (line) => console.log(`[rounds] ${line}`),
     })
   : null;
