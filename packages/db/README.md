@@ -453,3 +453,17 @@ them; and reports about them. Their partner in a match simply stops seeing it
 they made about someone else stay without their name, so the team can still act
 on them. Round totals are counts, not people, and stay as they were. The
 address is free to sign up again afterwards.
+
+## Exporting an account
+
+`exportAccount(prisma, userId)` returns everything HateD holds about a person
+as one JSON document (`format: "hated-export"`, `version: 1`), for the rights
+of access and data portability: the account and notification settings, email
+verifications, profile, answers, the traits and hopes matching uses, rounds,
+matches with the messages they sent, reports they made, sign-ins and
+notification devices.
+
+Left out on purpose, and said so in the export's `about`: other people's data
+(their names, their messages, and reports they made about this person), and
+secrets (sign-in codes and session tokens, which are only stored as hashes,
+and push tokens, which would let anyone notify the phone).

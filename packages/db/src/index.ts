@@ -119,6 +119,8 @@ export { createNotifier, silentNotifier, type Notifier } from './notify.js';
 
 export { deleteAccount } from './accounts.js';
 
+export { EXPORT_VERSION, exportAccount, type AccountExport } from './data-export.js';
+
 export {
   NOTIFICATION_KINDS,
   getNotificationPrefs,
