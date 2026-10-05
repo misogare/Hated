@@ -47,6 +47,9 @@ place, and `npm run mail:check` tests each of them in turn.
 1. **An SMTP key.** In Brevo, open **SMTP & API → SMTP** and generate an SMTP
    key. The login on that page (`…@smtp-brevo.com`) is `SMTP_USER`; the key is
    `SMTP_PASS`. It is *not* your account password, and Brevo shows it only once.
+   It is not an API key either: SMTP keys start with `xsmtpsib-`, while the API
+   Keys tab on the same page issues `xkeysib-` keys, which the relay rejects with
+   the same bare `535` as a wrong password. `mail:check` names this mix-up.
 2. **An authorized IP.** SMTP keys get no learning period: Brevo refuses SMTP from
    any IP not listed under **Settings → Security → Authorized IPs**. Add the public
    IP of every machine that sends: your dev box now, and the server's static egress

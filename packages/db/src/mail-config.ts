@@ -160,6 +160,15 @@ export function explainMailError(error: unknown, config: MailConfig): string | u
     return brevo ? brevoIpHint : 'The server refused this IP address. Authorize it with your provider.';
   }
   if (code === 'EAUTH' || code === 'ENOAUTH' || responseCode === 535) {
+    // Brevo issues API keys and SMTP keys from the same page, and its relay
+    // answers both mistakes with the same bare 535, so name the key mix-up.
+    if (brevo && config.pass.startsWith('xkeysib-')) {
+      return [
+        'SMTP_PASS holds a Brevo API key (xkeysib-…), which the SMTP relay refuses.',
+        'Generate an SMTP key (xsmtpsib-…) on the SMTP tab of SMTP & API instead.',
+        brevoIpHint,
+      ].join(' ');
+    }
     return [
       'The server refused the login.',
       'SMTP_USER must be the SMTP login, and SMTP_PASS an SMTP key or app password, not your account password.',

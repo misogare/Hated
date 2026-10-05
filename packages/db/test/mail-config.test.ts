@@ -155,6 +155,27 @@ describe('explainMailError', () => {
     expect(hint).toContain('Authorized IPs');
   });
 
+  it('names a Brevo API key used as the SMTP password', () => {
+    const config: MailConfig = { ...SMTP_CONFIG, pass: 'xkeysib-0123-abcd' };
+    const hint = explainMailError(smtpError({ code: 'EAUTH', responseCode: 535 }), config);
+
+    expect(hint).toMatch(/^SMTP_PASS holds a Brevo API key/);
+    expect(hint).toContain('SMTP tab');
+    expect(hint).not.toContain('0123-abcd');
+  });
+
+  it('does not blame the key type for an SMTP key or a non-Brevo relay', () => {
+    const smtpKey = explainMailError(smtpError({ code: 'EAUTH' }), { ...SMTP_CONFIG, pass: 'xsmtpsib-0123' });
+    const elsewhere = explainMailError(smtpError({ code: 'EAUTH' }), {
+      ...SMTP_CONFIG,
+      host: 'smtp.gmail.com',
+      pass: 'xkeysib-0123',
+    });
+
+    expect(smtpKey).not.toContain('API key');
+    expect(elsewhere).not.toContain('API key');
+  });
+
   it('leads with the IP hint when the reply says the IP is not authorized', () => {
     const hint = explainMailError(
       smtpError({ code: 'EAUTH', response: 'Unauthorized: IP not authorized' }),
