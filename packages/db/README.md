@@ -51,6 +51,23 @@ Every write is an upsert keyed on the schema's unique columns, so re-running is
 idempotent. The data itself lives in `src/seed-data.ts`, separate from the
 seeding logic, so it can be unit-tested without a database.
 
+### Demo population
+
+A round needs at least two compatible people. `npm run seed:demo` (from the
+repo root) adds 24 fictional, fully onboarded members at "HateD Demo
+University" (`demo.example.edu`), with a deterministic mix of genders and
+who they are open to, so a round on your machine produces real matches:
+
+```bash
+npm run seed:demo                     # replace the demo population
+npm run round -- --status PUBLISHED   # match everyone and publish
+npm run seed:demo -- --clear          # remove the demo members again
+```
+
+`example.edu` is reserved by IANA for documentation, so no email to a demo
+address reaches anyone. To sign in as a demo member (to answer your own chat,
+say), run the API with `MAIL_TRANSPORT=console` and read the code from its log.
+
 > Prisma ORM 7 requires Node `20.19+`, `22.12+`, or `24.0+`.
 
 ## TypeScript project references

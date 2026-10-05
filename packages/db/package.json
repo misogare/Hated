@@ -25,6 +25,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "push": "prisma db push",
     "seed": "prisma db seed",
+    "seed:demo": "tsx src/seed-demo.ts",
     "round": "tsx src/cli.ts",
     "round:inspect": "tsx src/inspect.ts",
     "compare": "tsx src/compare.ts",
