@@ -72,8 +72,16 @@ export interface Account {
     gender: string;
     seeking: string[];
     isActive: boolean;
+    /** Their line in their own words. */
+    bio: string | null;
+    prompts: PromptAnswer[];
+    /** What a match reads about them, worked out from their questionnaire. */
+    highlights: string[];
   } | null;
-  onboarding: { profile: boolean; answers: boolean };
+  /** Main first. */
+  photos: Photo[];
+  /** `photos`: at least two photos, the last onboarding step. */
+  onboarding: { profile: boolean; answers: boolean; photos: boolean };
   /** Which push notifications they want. */
   notifications: NotificationPrefs;
 }
@@ -100,6 +108,57 @@ export interface DataExport {
   version: number;
   exportedAt: string;
   about: string;
+}
+
+// --- Photos and words ------------------------------------------------------
+
+/**
+ * A profile photo. Fetch it from `GET /photos/:id/full` or
+ * `GET /photos/:id/blurred`, with the session token: a match gets only the
+ * blurred one until both have said hello.
+ */
+export interface Photo {
+  id: string;
+  /** Of the full photo, so a layout can keep its shape before it loads. */
+  width: number;
+  height: number;
+}
+
+export type PhotoVariant = 'full' | 'blurred';
+
+/** The person's photos after a change, main first. */
+export interface PhotosResponse {
+  photos: Photo[];
+}
+
+/** `PUT /me/photos/order`: every one of the person's photo ids, main first. */
+export interface PhotoOrderRequest {
+  ids: string[];
+}
+
+/** A prompt the app offers, e.g. `{ key: 'perfect-sunday', label: 'A perfect Sunday' }`. */
+export interface Prompt {
+  key: string;
+  label: string;
+}
+
+export interface PromptsResponse {
+  prompts: Prompt[];
+}
+
+export interface PromptAnswer extends Prompt {
+  answer: string;
+}
+
+/** `PUT /me/words`. Up to three prompts; a blank answer drops that prompt. */
+export interface WordsRequest {
+  bio: string | null;
+  prompts: Array<{ key: string; answer: string }>;
+}
+
+export interface WordsResponse {
+  bio: string | null;
+  prompts: PromptAnswer[];
 }
 
 export interface ProfileRequest {
@@ -156,8 +215,22 @@ export interface DesiresBody {
 
 export interface Match {
   matchId: string;
-  partner: { displayName: string; age: number; institution: string | null };
+  partner: {
+    displayName: string;
+    age: number;
+    institution: string | null;
+    bio: string | null;
+    prompts: PromptAnswer[];
+    /** Worked out from their questionnaire, e.g. "Humor comes first". */
+    highlights: string[];
+    /** Main first. None once the match has ended. */
+    photos: Photo[];
+  };
+  /** Both said hello and neither passed: the photos can be fetched in full. */
+  photosUnlocked: boolean;
   reasons: string[];
+  /** Ways to start the conversation, from the partner's prompts and what the two share. */
+  openers: string[];
   saidHello: boolean;
   mutual: boolean;
   passed: boolean;
@@ -170,12 +243,27 @@ export interface MatchSummary {
   matchId: string;
   roundId: string;
   publishedAt: string;
-  partner: { displayName: string; age: number; institution: string | null };
+  partner: {
+    displayName: string;
+    age: number;
+    institution: string | null;
+    /** Their main photo; none once the match has ended. */
+    photo: Photo | null;
+  };
   saidHello: boolean;
   mutual: boolean;
   passed: boolean;
+  /** Both said hello and neither passed: the photo can be fetched in full. */
+  photosUnlocked: boolean;
   lastMessage: { body: string; sentAt: string; mine: boolean } | null;
   unread: number;
+}
+
+/** `GET /matches/:id`: one match, from any published round. */
+export interface MatchDetail {
+  roundId: string;
+  publishedAt: string;
+  match: Match;
 }
 
 export interface MatchesResponse {

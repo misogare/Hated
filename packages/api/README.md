@@ -23,6 +23,7 @@ Node 20.19+ (Prisma 7).
 | `ROUND_AUTORUN` | `true` | Run each round automatically at its slot. `false` leaves it to `npm run round`. |
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy, so per-IP limits read `X-Forwarded-For`. |
 | `EXPO_ACCESS_TOKEN` | (none) | Only if the Expo project has enhanced push security on. |
+| `PHOTO_DIR` | `packages/db/data/photos` | Where photo files are kept. Git ignores the default. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
 instead of emailed, which is handy for local development.
@@ -44,11 +45,19 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `PUT /me/notifications` `{ messages?, hellos?, rounds? }` | Turn each kind of push notification on or off, on every device; kinds left out stay as they are | 400 for anything else |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |
+| `GET /me/photos` | Their photos, main first | |
+| `POST /me/photos` (multipart, `photo`) | Add a photo (JPEG, PNG or WebP, up to 15 MB) | 201 with every photo; 422 `invalid` (not a photo, too small), 409 `too-many` (six at most), 413 `too-large`, 429 after 30 an hour |
+| `PUT /me/photos/order` `{ ids }` | Reorder them; the first is the main one | 422 `invalid` unless it lists each photo once |
+| `DELETE /me/photos/:id` | Remove one | 404 `not-found` |
+| `GET /photos/:id/full` / `GET /photos/:id/blurred` | The photo as JPEG, if this person may see that version (see below) | 404 otherwise |
+| `PUT /me/words` `{ bio, prompts }` | Their line and up to three prompt answers | 422 `invalid` with `problems` |
+| `GET /prompts` | The prompts the app offers | |
 | `GET /questionnaire` | The active questionnaire, in order | |
 | `GET`/`PUT /me/answers` | Answers by question key; `null` skips | 409 `no-profile`, 422 `invalid` |
 | `GET`/`PUT /me/desires` | What they hope for per trait; weight 0 = don't mind | 409 `no-profile`, 422 `invalid` |
 | `GET /home` | Next round time, opt-in state, latest published result, unread total | |
-| `GET /matches` | Every match from published rounds, newest first, with last message and unread count | |
+| `GET /matches` | Every match from published rounds, newest first, with main photo, last message and unread count | |
+| `GET /matches/:id` | One match from any published round: the other person's words, highlights and photos, why they fit, and openers | 404 `not-found` |
 | `POST /matches/:id/report` `{ reason, details? }` | Report for review; also ends the match like a pass | 422 `invalid`, 404 `not-found` |
 | `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed` |
 | `POST /matches/:id/pass` | Never be matched with them again | 404 `not-found` |
@@ -78,6 +87,25 @@ guess, so sign-in is limited twice over:
   many inboxes or guessing across many codes.
 
 Over a limit, the answer is 429 with `Retry-After`.
+
+## Photos
+
+Each upload is turned upright, fitted within 1080 by 1350 and re-encoded as
+JPEG, which drops all metadata, so a phone's GPS position never leaves with the
+photo. A blurred copy is made at the same time, shrunk to a few dozen pixels
+first so no detail can come back. The original upload is never kept.
+
+Who may fetch what:
+
+- Your own photos, in full.
+- A match's photos, blurred, until you have both said hello; then in full.
+  Blurring on the server matters: blurring in the app would put the real photo
+  on the wire.
+- Nothing from someone you aren't matched with, from a round that isn't
+  published, or from a match that has ended. That reads as 404, so photo ids
+  reveal nothing.
+
+Photo responses are `Cache-Control: private` and expire after an hour.
 
 ## Push notifications
 

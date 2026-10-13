@@ -9,26 +9,34 @@
 import type {
   AccountExport,
   AccountView,
+  AddPhotoResult,
   AnswerValue,
   DesireInput,
   ListMessagesResult,
+  MatchDetail,
   MatchSummary,
   Notifier,
   MatchActionResult,
   NewSession,
   NotificationPrefs,
+  PhotoVariant,
+  PhotoView,
   ProfileInput,
   RegisterPushTokenResult,
+  ReorderPhotosResult,
   ReportResult,
   QuestionnaireView,
   RoundResultView,
   SaveProfileResult,
   SaveResult,
+  SaveWordsResult,
   SendMessageResult,
   StartSignInResult,
   VerifyCodeResult,
+  WordsInput,
 } from '@hated/db';
 import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
@@ -69,6 +77,18 @@ export interface ApiServices {
   deleteAccount(userId: string): Promise<boolean>;
   /** Everything about the account, or null if there is no such account. */
   exportAccount(userId: string): Promise<AccountExport | null>;
+  listPhotos(userId: string): Promise<PhotoView[]>;
+  addPhoto(userId: string, upload: Buffer): Promise<AddPhotoResult>;
+  /** False if it isn't theirs. */
+  deletePhoto(userId: string, photoId: string): Promise<boolean>;
+  reorderPhotos(userId: string, ids: string[]): Promise<ReorderPhotosResult>;
+  /** The bytes of that version of the photo, if this person may see it; otherwise null. */
+  readPhoto(userId: string, photoId: string, variant: PhotoVariant): Promise<Buffer | null>;
+  saveWords(userId: string, input: WordsInput): Promise<SaveWordsResult>;
+  /** The prompts the app offers. */
+  promptChoices(): Array<{ key: string; label: string }>;
+  /** One of the person's matches, from any published round; null if it isn't theirs. */
+  getMatch(userId: string, matchId: string): Promise<MatchDetail | null>;
 }
 
 export interface ApiOptions {
@@ -107,6 +127,10 @@ const VERIFY_CODE_LIMITS = [
 ];
 /** Per person: an export reads the whole account, and nobody needs one a minute. */
 const EXPORT_LIMITS = [{ limit: 5, windowMs: 60 * 60_000 }];
+/** Per person: plenty for trying photos out, few enough to keep processing cheap. */
+const UPLOAD_LIMITS = [{ limit: 30, windowMs: 60 * 60_000 }];
+/** An upload's size, with room for the form around it. The service checks the photo itself. */
+const MAX_UPLOAD_BODY = 15 * 1024 * 1024 + 64 * 1024;
 
 type Env = { Variables: { userId: string; token: string } };
 
@@ -136,6 +160,12 @@ const ReportBody = z.object({ reason: z.string().max(40), details: z.string().ma
 const DesiresBody = z.object({
   desires: z.record(Key, z.object({ target: z.number(), weight: z.number() })),
 });
+// The service checks the real lengths and the prompt keys.
+const WordsBody = z.object({
+  bio: z.string().max(1_000).nullable(),
+  prompts: z.array(z.object({ key: Key, answer: z.string().max(2_000) })).max(10),
+});
+const PhotoOrderBody = z.object({ ids: z.array(z.string().min(1).max(64)).max(10) });
 
 export function createApp(options: ApiOptions): Hono<Env> {
   const { services, schedule } = options;
@@ -146,6 +176,7 @@ export function createApp(options: ApiOptions): Hono<Env> {
   const sendCodeLimiter = createRateLimiter(SEND_CODE_LIMITS, clock);
   const verifyCodeLimiter = createRateLimiter(VERIFY_CODE_LIMITS, clock);
   const exportLimiter = createRateLimiter(EXPORT_LIMITS, clock);
+  const uploadLimiter = createRateLimiter(UPLOAD_LIMITS, clock);
   const app = new Hono<Env>();
 
   /** 429 with Retry-After when this caller (by IP, or by `key`) is over the limit, else null. */
@@ -312,6 +343,81 @@ export function createApp(options: ApiOptions): Hono<Env> {
     return c.json<Api.ActiveRequest>({ active: body.value.active });
   });
 
+  // --- Photos and words ------------------------------------------------------
+
+  app.get('/me/photos', requireUser, async (c) =>
+    c.json<Api.PhotosResponse>({ photos: await services.listPhotos(c.get('userId')) }),
+  );
+
+  app.post(
+    '/me/photos',
+    requireUser,
+    bodyLimit({
+      maxSize: MAX_UPLOAD_BODY,
+      onError: (c) => c.json<Api.ApiError>({ error: 'too-large', problems: ['That photo is too big. Try one under 15 MB.'] }, 413),
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      const tooMany = limited(c, uploadLimiter, userId);
+      if (tooMany !== null) return tooMany;
+
+      const form = await c.req.parseBody().catch(() => null);
+      const photo = form?.['photo'];
+      if (!(photo instanceof File)) {
+        return c.json<Api.ApiError>({ error: 'invalid-body', problems: ['Send the photo as multipart form data, in a "photo" field.'] }, 400);
+      }
+
+      const result = await services.addPhoto(userId, Buffer.from(await photo.arrayBuffer()));
+      if (result.ok) return c.json<Api.PhotosResponse>({ photos: await services.listPhotos(userId) }, 201);
+      if (result.reason === 'invalid') return c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
+      if (result.reason === 'too-many') {
+        return c.json<Api.ApiError>({ error: 'too-many', problems: ['Six photos at most. Remove one to add another.'] }, 409);
+      }
+      return c.json<Api.ApiError>({ error: 'no-profile' }, 409);
+    },
+  );
+
+  app.put('/me/photos/order', requireUser, async (c) => {
+    const body = await readBody(c, PhotoOrderBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.reorderPhotos(c.get('userId'), body.value.ids);
+    if (!result.ok) return c.json<Api.ApiError>({ error: 'invalid', problems: ['List each of your photos once.'] }, 422);
+    return c.json<Api.PhotosResponse>({ photos: result.photos });
+  });
+
+  app.delete('/me/photos/:photoId', requireUser, async (c) => {
+    const userId = c.get('userId');
+    if (!(await services.deletePhoto(userId, c.req.param('photoId')))) return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+    return c.json<Api.PhotosResponse>({ photos: await services.listPhotos(userId) });
+  });
+
+  // A photo someone may not see is simply not found, so ids reveal nothing.
+  app.get('/photos/:photoId/:variant', requireUser, async (c) => {
+    const variant = c.req.param('variant');
+    if (variant !== 'full' && variant !== 'blurred') return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+    const bytes = await services.readPhoto(c.get('userId'), c.req.param('photoId'), variant);
+    if (bytes === null) return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+
+    c.header('Content-Type', 'image/jpeg');
+    // Only for this person, and only for a while: access ends when a match does.
+    c.header('Cache-Control', 'private, max-age=3600');
+    return c.body(new Uint8Array(bytes));
+  });
+
+  app.get('/prompts', requireUser, (c) => c.json<Api.PromptsResponse>({ prompts: services.promptChoices() }));
+
+  app.put('/me/words', requireUser, async (c) => {
+    const body = await readBody(c, WordsBody);
+    if (!body.ok) return body.response;
+
+    const result = await services.saveWords(c.get('userId'), body.value);
+    if (result.ok) return c.json<Api.WordsResponse>(result.words);
+    return result.reason === 'no-profile'
+      ? c.json<Api.ApiError>({ error: 'no-profile' }, 409)
+      : c.json<Api.ApiError>({ error: 'invalid', problems: result.problems }, 422);
+  });
+
   // --- Questionnaire ---------------------------------------------------------
 
   app.get('/questionnaire', requireUser, async (c) => {
@@ -361,6 +467,12 @@ export function createApp(options: ApiOptions): Hono<Env> {
   app.get('/matches', requireUser, async (c) =>
     c.json<Api.MatchesResponse>({ matches: await services.listMatches(c.get('userId')) }),
   );
+
+  app.get('/matches/:matchId', requireUser, async (c) => {
+    const detail = await services.getMatch(c.get('userId'), c.req.param('matchId'));
+    if (detail === null) return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+    return c.json<Api.MatchDetail>(detail);
+  });
 
   app.post('/matches/:matchId/report', requireUser, async (c) => {
     const body = await readBody(c, ReportBody);

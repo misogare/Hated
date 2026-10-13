@@ -13,8 +13,19 @@ const ACCOUNT: AccountView = {
   email: 'sam@vu.edu.au',
   emailVerified: true,
   institution: { name: 'Victoria University', domain: 'vu.edu.au' },
-  profile: { displayName: 'Sam', birthDate: '2003-04-20', age: 23, gender: 'woman', seeking: [], isActive: true },
-  onboarding: { profile: true, answers: true },
+  profile: {
+    displayName: 'Sam',
+    birthDate: '2003-04-20',
+    age: 23,
+    gender: 'woman',
+    seeking: [],
+    isActive: true,
+    bio: null,
+    prompts: [],
+    highlights: [],
+  },
+  photos: [],
+  onboarding: { profile: true, answers: true, photos: true },
   notifications: { messages: true, hellos: true, rounds: true },
 };
 
@@ -602,5 +613,149 @@ describe('data export', () => {
     const sixth = await a.request('/me/export', send('GET', undefined, bearer));
     expect(sixth.status).toBe(429);
     expect(Number(sixth.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+});
+
+describe('photos', () => {
+  const PHOTO = { id: 'p1', width: 600, height: 750 };
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+
+  function upload(bytes: Uint8Array = JPEG, field = 'photo') {
+    const form = new FormData();
+    form.append(field, new Blob([bytes], { type: 'image/jpeg' }), 'me.jpg');
+    return { method: 'POST', headers: bearer, body: form };
+  }
+
+  it('takes an upload as multipart form data and answers with every photo', async () => {
+    let received: Buffer | undefined;
+    const res = await app({
+      addPhoto: async (_userId, bytes) => {
+        received = bytes;
+        return { ok: true, photo: PHOTO };
+      },
+      listPhotos: async () => [PHOTO],
+    }).request('/me/photos', upload());
+
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ photos: [PHOTO] });
+    expect(received?.equals(JPEG)).toBe(true);
+  });
+
+  it('says why an upload was refused', async () => {
+    const refusals = [
+      [{ ok: false, reason: 'invalid', problem: 'That photo is too small.' }, 422, { error: 'invalid', problems: ['That photo is too small.'] }],
+      [{ ok: false, reason: 'too-many' }, 409, { error: 'too-many', problems: ['Six photos at most. Remove one to add another.'] }],
+      [{ ok: false, reason: 'no-profile' }, 409, { error: 'no-profile' }],
+    ] as const;
+    for (const [result, status, body] of refusals) {
+      const res = await app({ addPhoto: async () => result }).request('/me/photos', upload());
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual(body);
+    }
+
+    expect((await app().request('/me/photos', upload(JPEG, 'picture'))).status).toBe(400);
+    expect((await app().request('/me/photos', send('POST', { photo: 'base64?' }, bearer))).status).toBe(400);
+    expect((await app().request('/me/photos', { method: 'POST', body: new FormData() })).status).toBe(401);
+  });
+
+  it('refuses an upload over 15 MB before reading it', async () => {
+    const res = await app().request('/me/photos', upload(new Uint8Array(16 * 1024 * 1024)));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ error: 'too-large' });
+  });
+
+  it('allows thirty uploads an hour per person', async () => {
+    const a = app({ addPhoto: async () => ({ ok: true, photo: PHOTO }), listPhotos: async () => [PHOTO] });
+    for (let i = 0; i < 30; i++) expect((await a.request('/me/photos', upload())).status).toBe(201);
+    expect((await a.request('/me/photos', upload())).status).toBe(429);
+  });
+
+  it('removes and reorders photos, answering with the new list', async () => {
+    const removed = await app({ deletePhoto: async (_u, id) => id === 'p1', listPhotos: async () => [] }).request('/me/photos/p1', {
+      method: 'DELETE',
+      headers: bearer,
+    });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ photos: [] });
+    expect((await app({ deletePhoto: async () => false }).request('/me/photos/nope', { method: 'DELETE', headers: bearer })).status).toBe(404);
+
+    let order: string[] = [];
+    const reordered = await app({
+      reorderPhotos: async (_u, ids) => {
+        order = ids;
+        return { ok: true, photos: [PHOTO] };
+      },
+    }).request('/me/photos/order', send('PUT', { ids: ['p2', 'p1'] }, bearer));
+    expect(reordered.status).toBe(200);
+    expect(order).toEqual(['p2', 'p1']);
+    const refused = await app({ reorderPhotos: async () => ({ ok: false, reason: 'invalid' }) }).request(
+      '/me/photos/order',
+      send('PUT', { ids: ['p1'] }, bearer),
+    );
+    expect(refused.status).toBe(422);
+  });
+
+  it('serves a photo only to someone allowed to see that version, and never caches it publicly', async () => {
+    const asked: string[] = [];
+    const a = app({
+      readPhoto: async (userId, photoId, variant) => {
+        asked.push(`${userId} ${photoId} ${variant}`);
+        return variant === 'blurred' ? JPEG : null;
+      },
+    });
+
+    const blurred = await a.request('/photos/p1/blurred', { headers: bearer });
+    expect(blurred.status).toBe(200);
+    expect(blurred.headers.get('content-type')).toBe('image/jpeg');
+    expect(blurred.headers.get('cache-control')).toBe('private, max-age=3600');
+    expect(Buffer.from(await blurred.arrayBuffer()).equals(JPEG)).toBe(true);
+
+    expect((await a.request('/photos/p1/full', { headers: bearer })).status).toBe(404);
+    expect((await a.request('/photos/p1/original', { headers: bearer })).status).toBe(404);
+    expect((await a.request('/photos/p1/blurred')).status).toBe(401);
+    expect(asked).toEqual(['user-1 p1 blurred', 'user-1 p1 full']);
+  });
+});
+
+describe('words and prompts', () => {
+  it('saves a line and prompt answers, or says what is wrong', async () => {
+    const words = { bio: 'Bookshop on Sunday.', prompts: [{ key: 'perfect-sunday', label: 'A perfect Sunday', answer: 'Market.' }] };
+    let input: unknown;
+    const ok = await app({
+      saveWords: async (_u, value) => {
+        input = value;
+        return { ok: true, words };
+      },
+    }).request('/me/words', send('PUT', { bio: 'Bookshop on Sunday.', prompts: [{ key: 'perfect-sunday', answer: 'Market.' }] }, bearer));
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual(words);
+    expect(input).toEqual({ bio: 'Bookshop on Sunday.', prompts: [{ key: 'perfect-sunday', answer: 'Market.' }] });
+
+    const invalid = await app({ saveWords: async () => ({ ok: false, reason: 'invalid', problems: ['Choose up to 3 prompts.'] }) }).request(
+      '/me/words',
+      send('PUT', { bio: null, prompts: [] }, bearer),
+    );
+    expect(invalid.status).toBe(422);
+    expect(await invalid.json()).toEqual({ error: 'invalid', problems: ['Choose up to 3 prompts.'] });
+    const noProfile = app({ saveWords: async () => ({ ok: false, reason: 'no-profile' }) });
+    expect((await noProfile.request('/me/words', send('PUT', { bio: null, prompts: [] }, bearer))).status).toBe(409);
+    expect((await app().request('/me/words', send('PUT', { bio: 3, prompts: [] }, bearer))).status).toBe(400);
+  });
+
+  it('lists the prompts the app offers', async () => {
+    const res = await app({ promptChoices: () => [{ key: 'perfect-sunday', label: 'A perfect Sunday' }] }).request('/prompts', { headers: bearer });
+    expect(await res.json()).toEqual({ prompts: [{ key: 'perfect-sunday', label: 'A perfect Sunday' }] });
+  });
+});
+
+describe('GET /matches/:id', () => {
+  it("returns one of the person's matches, and nobody else's", async () => {
+    const detail = { roundId: 'r1', publishedAt: NOW.toISOString(), match: { matchId: 'm1' } } as never;
+    const a = app({ getMatch: async (_u, matchId) => (matchId === 'm1' ? detail : null) });
+
+    const found = await a.request('/matches/m1', { headers: bearer });
+    expect(found.status).toBe(200);
+    expect(await found.json()).toEqual(detail);
+    expect((await a.request('/matches/m2', { headers: bearer })).status).toBe(404);
   });
 });
