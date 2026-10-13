@@ -36,6 +36,7 @@ import { runMatchRound, type FairObjective, type MatchRoundOptions } from '@hate
 
 import type { MatchRoundStatus } from './generated/prisma/enums.js';
 import { createPrismaClient } from './index.js';
+import { createLiveNotifier } from './live.js';
 import { createNotifier } from './notify.js';
 import { loadEngineProfiles } from './population.js';
 import { createExpoPushSender } from './push-sender.js';
@@ -227,6 +228,11 @@ async function main(): Promise<void> {
         })
       : null;
 
+    // Open apps hear about a published round at once (through the API's live
+    // connections); pushes go out only when asked for.
+    if (persisted !== null && args.status === 'PUBLISHED') {
+      await createLiveNotifier(prisma).roundPublished(persisted.roundId);
+    }
     // People only see PUBLISHED rounds, so only those are worth a notification.
     if (args.notify && persisted !== null && args.status === 'PUBLISHED') {
       const sender = createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined });

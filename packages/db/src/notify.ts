@@ -24,6 +24,8 @@ export interface Notifier {
   messageSent(matchId: string, senderUserId: string): Promise<void>;
   /** `userId`'s hello on `matchId` made it mutual. */
   becameMutual(matchId: string, userId: string): Promise<void>;
+  /** `userId` passed on or reported `matchId`, which ended it. */
+  matchEnded(matchId: string, userId: string): Promise<void>;
   /** Round `roundId` was just published. */
   roundPublished(roundId: string): Promise<void>;
 }
@@ -32,6 +34,7 @@ export interface Notifier {
 export const silentNotifier: Notifier = {
   messageSent: async () => undefined,
   becameMutual: async () => undefined,
+  matchEnded: async () => undefined,
   roundPublished: async () => undefined,
 };
 
@@ -106,6 +109,9 @@ export function createNotifier(
         },
       ]);
     },
+
+    // Never pushed: nobody should get a notification that they were passed on.
+    matchEnded: async () => undefined,
 
     async roundPublished(roundId) {
       const participants = await prisma.matchRoundParticipant

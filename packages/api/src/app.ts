@@ -109,6 +109,7 @@ export interface ApiOptions {
 const SILENT: Notifier = {
   messageSent: async () => undefined,
   becameMutual: async () => undefined,
+  matchEnded: async () => undefined,
   roundPublished: async () => undefined,
 };
 

@@ -454,6 +454,15 @@ The account view carries all of this, and onboarding counts the profile as
 finished at two photos. The match view (`getLatestResult`, `getMatch`) carries
 the partner's, with `photosUnlocked`.
 
+## Live events
+
+`createLiveNotifier` announces the moments the push notifier pushes (and a match
+ending) as live events, through Postgres `NOTIFY` on the `hated_live` channel;
+`listenLive` hears them, with the people each is for, on its own connection
+and reconnects if it drops. The API forwards them to open apps over a
+WebSocket. `npm run round -- --status PUBLISHED` announces the round this way
+too, so open apps see their result at once.
+
 ## Reviewing reports
 
 People can report a match from the app; reporting also ends that match. Open
