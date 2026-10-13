@@ -59,7 +59,8 @@ Two to six photos, a line in Sam's own words and two prompts to answer. A
 match reads all of it before deciding, but sees the photos only as a blur
 until both of them have said hello, and "See them as your match will" shows
 exactly that. Each photo is re-encoded when it's uploaded, which leaves
-everything hidden in the file behind, location included.
+everything hidden in the file behind, location included, and a person checks
+it before any match sees it.
 
 <p align="center">
   <img src="docs/readme/photos.png" width="260" alt="Sam's photos and a line about Sam">
@@ -98,7 +99,8 @@ From the moment the round is published, the two of them have 24 hours to say
 hello. Sam says it and can put the phone down; the countdown shows how long
 Maya still has. If the time runs out before both have said it, the match closes
 quietly, with the same words on both sides, so nobody ever learns who said
-hello and who didn't.
+hello and who didn't. A few hours before it does, whoever hasn't said hello
+gets a reminder, worded the same whether or not the other person has.
 
 Maya says hello back. Both phones move at the same moment: the two circles
 meet, the photos come into focus, and the conversation opens.
@@ -112,7 +114,7 @@ meet, the photos come into focus, and the conversation opens.
 
 An empty conversation suggests a few ways in, drawn from Maya's prompts and
 from what the two of them share. One tap puts it in the message box, and then
-it's just two people talking.
+it's just two people talking, with three dots when the other one is writing.
 
 <p align="center">
   <img src="docs/readme/chat-openers.png" width="260" alt="An empty conversation with three suggested openers">
@@ -122,9 +124,11 @@ it's just two people talking.
 ### 8. Every week after
 
 Every round's match stays in one list, newest first, with the last message and
-anything unread. In settings Sam can change any answer, choose which
-notifications to get, sit out rounds, download a copy of everything HateD
-holds, or delete the account and everything in it.
+anything unread. When the next week comes, home asks once how it went with
+Maya: really well, okay, or not for me. Only HateD sees the answer, as a
+signal for making matches better. In settings Sam can change any answer,
+choose which notifications to get, sit out rounds, download a copy of
+everything HateD holds, or delete the account and everything in it.
 
 <p align="center">
   <img src="docs/readme/matches.png" width="260" alt="Your matches: a new one this week, one that closed when its 24 hours ran out, and two conversations">
@@ -174,14 +178,15 @@ flowchart LR
 | --- | --- |
 | [`packages/core`](packages/core) | The matching engine: ranking, orientation-aware sides, Gale–Shapley, and the fairness search. |
 | [`packages/db`](packages/db) | Everything that touches Postgres: sign-in, profiles, photos, rounds, the chat, live events, reports, and the data export. |
-| [`packages/api`](packages/api) | The HTTP and WebSocket API the app talks to, which also runs the weekly round. |
+| [`packages/api`](packages/api) | The HTTP and WebSocket API the app talks to, which also runs the weekly round, sends the reminders, and serves a small admin page for reviewing photos and reports. |
 | [`packages/mobile`](packages/mobile) | The app for iOS, Android and the web, with Expo Router, and the browser demo. |
 
 The db, api and mobile packages each have a README with the details; the
 engine explains itself in its source.
 
 **Privacy, by default.** The server decides on every request which photos a
-person may see. Photos lose their metadata when they're uploaded. Push
+person may see, and a photo reaches a match only once it's been reviewed.
+Photos lose their metadata when they're uploaded. Push
 notifications never carry a message's text. A pass or a report ends a match
 without telling the other person why, and a match that closes unanswered reads
 the same to both people. Anyone can download everything HateD holds about them,
@@ -205,7 +210,13 @@ npm run mobile                                     # the app: scan the QR code w
 With no email provider configured, the API prints each sign-in code in its
 terminal, so you can sign in with any address at `demo.example.edu`, the demo
 members' included. Rounds run on their own on Sundays at 8 pm (Melbourne time,
-unless you change it); `npm run round -- --status PUBLISHED` runs one now. `npm run web -w @hated/mobile` opens the app in a browser instead.
+unless you change it); `npm run round -- --status PUBLISHED` runs one now.
+`npm run web -w @hated/mobile` opens the app in a browser instead.
+
+New photos wait for a review before a match sees them. Put `ADMIN_PASSWORD`
+(16 characters or more) in `packages/api/.env` to open the admin page at
+`http://localhost:3000/admin` (user `admin`), or `PHOTO_REVIEW=false` to skip
+reviews on your own machine.
 
 To check everything:
 
