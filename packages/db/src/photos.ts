@@ -9,6 +9,9 @@
  * - Nothing once a match has ended (a pass or a report), and nothing of anyone
  *   else's. A photo someone may not see reads as not found, so ids reveal
  *   nothing.
+ * - Only approved photos reach a match. A new one waits for a review (unless
+ *   reviewing is off), seen by its owner alone, marked so; a rejected one stays
+ *   theirs alone.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -30,27 +33,58 @@ export interface PhotoView {
   height: number;
 }
 
+export type PhotoReview = 'pending' | 'approved' | 'rejected';
+
+/** One of the person's own photos, with where its review stands. */
+export interface OwnPhotoView extends PhotoView {
+  review: PhotoReview;
+}
+
+/** A photo waiting for a review, with whose it is. */
+export interface PhotoToReview {
+  id: string;
+  ownerName: string;
+  uploadedAt: string;
+  width: number;
+  height: number;
+}
+
 export type AddPhotoResult =
-  | { ok: true; photo: PhotoView }
+  | { ok: true; photo: OwnPhotoView }
   | { ok: false; reason: 'no-profile' | 'too-many' }
   | { ok: false; reason: 'invalid'; problem: string };
 
-export type ReorderPhotosResult = { ok: true; photos: PhotoView[] } | { ok: false; reason: 'invalid' };
+export type ReorderPhotosResult = { ok: true; photos: OwnPhotoView[] } | { ok: false; reason: 'invalid' };
 
-const VIEW = { id: true, width: true, height: true } as const;
+const OWN = { id: true, width: true, height: true, status: true } as const;
+
+function own(row: { id: string; width: number; height: number; status: 'PENDING' | 'APPROVED' | 'REJECTED' }): OwnPhotoView {
+  return { id: row.id, width: row.width, height: row.height, review: row.status.toLowerCase() as PhotoReview };
+}
 
 /** The file a photo's version is kept under. */
 export function photoKey(photoId: string, variant: PhotoVariant): string {
   return variant === 'full' ? `${photoId}.jpg` : `${photoId}.blur.jpg`;
 }
 
-/** Someone's photos in order, main first. */
-export async function listPhotos(prisma: PrismaClient, userId: string): Promise<PhotoView[]> {
-  return prisma.photo.findMany({ where: { profile: { userId } }, orderBy: { position: 'asc' }, select: VIEW });
+/** Someone's own photos in order, main first, with where each one's review stands. */
+export async function listPhotos(prisma: PrismaClient, userId: string): Promise<OwnPhotoView[]> {
+  return (await prisma.photo.findMany({ where: { profile: { userId } }, orderBy: { position: 'asc' }, select: OWN })).map(own);
 }
 
-/** Process an upload, keep both versions, and add it after the person's other photos. */
-export async function addPhoto(prisma: PrismaClient, store: PhotoStore, userId: string, upload: Buffer): Promise<AddPhotoResult> {
+/**
+ * Process an upload, keep both versions, and add it after the person's other
+ * photos. It waits for a review before any match sees it, unless `review` is
+ * false (painted demo portraits, or a server with reviewing off).
+ */
+export async function addPhoto(
+  prisma: PrismaClient,
+  store: PhotoStore,
+  userId: string,
+  upload: Buffer,
+  options: { review?: boolean } = {},
+): Promise<AddPhotoResult> {
+  const review = options.review !== false;
   const profile = await prisma.profile.findUnique({ where: { userId }, select: { id: true } });
   if (profile === null) return { ok: false, reason: 'no-profile' };
   if ((await prisma.photo.count({ where: { profileId: profile.id } })) >= MAX_PHOTOS) return { ok: false, reason: 'too-many' };
@@ -74,10 +108,18 @@ export async function addPhoto(prisma: PrismaClient, store: PhotoStore, userId: 
       const position = Math.max(-1, ...photos.map((photo) => photo.position)) + 1;
       try {
         const photo = await prisma.photo.create({
-          data: { id, profileId: profile.id, position, width: processed.photo.width, height: processed.photo.height },
-          select: VIEW,
+          data: {
+            id,
+            profileId: profile.id,
+            position,
+            width: processed.photo.width,
+            height: processed.photo.height,
+            status: review ? 'PENDING' : 'APPROVED',
+            reviewedAt: review ? null : new Date(),
+          },
+          select: OWN,
         });
-        return { ok: true, photo };
+        return { ok: true, photo: own(photo) };
       } catch (error) {
         if ((error as { code?: unknown }).code !== 'P2002' || attempt >= 3) throw error;
       }
@@ -120,10 +162,11 @@ export async function reorderPhotos(prisma: PrismaClient, userId: string, ids: r
 export async function photoAccess(prisma: PrismaClient, viewerUserId: string, photoId: string): Promise<PhotoVariant | null> {
   const photo = await prisma.photo.findUnique({
     where: { id: photoId },
-    select: { profile: { select: { id: true, userId: true } } },
+    select: { status: true, profile: { select: { id: true, userId: true } } },
   });
   if (photo === null) return null;
   if (photo.profile.userId === viewerUserId) return 'full';
+  if (photo.status !== 'APPROVED') return null;
 
   const viewer = await prisma.profile.findUnique({ where: { userId: viewerUserId }, select: { id: true } });
   if (viewer === null) return null;
@@ -166,6 +209,37 @@ export async function readPhoto(
   const access = await photoAccess(prisma, viewerUserId, photoId);
   if (access === null || (variant === 'full' && access !== 'full')) return null;
   return store.get(photoKey(photoId, variant));
+}
+
+/** Photos waiting for a review, oldest first. */
+export async function listPhotosToReview(prisma: PrismaClient, options: { limit?: number } = {}): Promise<PhotoToReview[]> {
+  const rows = await prisma.photo.findMany({
+    where: { status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    take: options.limit ?? 100,
+    select: { id: true, width: true, height: true, createdAt: true, profile: { select: { displayName: true } } },
+  });
+  return rows.map((row) => ({ id: row.id, ownerName: row.profile.displayName, uploadedAt: row.createdAt.toISOString(), width: row.width, height: row.height }));
+}
+
+/** Approve a photo, so matches can see it, or reject it, so only its owner does. False if there's no such photo. */
+export async function reviewPhoto(
+  prisma: PrismaClient,
+  photoId: string,
+  decision: 'approve' | 'reject',
+  options: { now?: Date } = {},
+): Promise<boolean> {
+  const { count } = await prisma.photo.updateMany({
+    where: { id: photoId },
+    data: { status: decision === 'approve' ? 'APPROVED' : 'REJECTED', reviewedAt: options.now ?? new Date() },
+  });
+  return count > 0;
+}
+
+/** The full photo, whatever its review, for whoever reviews it; null if there's no such photo. */
+export async function readPhotoForReview(prisma: PrismaClient, store: PhotoStore, photoId: string): Promise<Buffer | null> {
+  const photo = await prisma.photo.findUnique({ where: { id: photoId }, select: { id: true } });
+  return photo === null ? null : store.get(photoKey(photo.id, 'full'));
 }
 
 /** Delete both files of each photo. */

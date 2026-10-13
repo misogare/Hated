@@ -249,7 +249,7 @@ async function viewMatch(
         },
       },
     }),
-    profileCard(prisma, partnerId),
+    profileCard(prisma, partnerId, { approvedOnly: true }),
     prisma.profileBlock.findFirst({
       where: {
         OR: [

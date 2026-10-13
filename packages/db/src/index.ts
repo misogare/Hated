@@ -40,9 +40,11 @@ export {
 
 export {
   getRoundReport,
+  listRecentRounds,
   type RoundReport,
   type RoundReportMatch,
   type RoundReportParticipant,
+  type RoundSummary,
   type StoredMetrics,
 } from './round-info.js';
 
@@ -135,6 +137,8 @@ export { HELLO_WINDOW_MS, helloDeadline, helloExpired, reminderLeadMs, type Hell
 
 export { sendHelloReminders } from './hello-reminders.js';
 
+export { listReports, resolveReport, type ReportView } from './reports.js';
+
 export {
   FEEDBACK_ANSWERS,
   feedbackDue,
@@ -154,12 +158,18 @@ export {
   addPhoto,
   deletePhoto,
   listPhotos,
+  listPhotosToReview,
   photoAccess,
   photoKey,
   readPhoto,
+  readPhotoForReview,
   removePhotoFiles,
   reorderPhotos,
+  reviewPhoto,
   type AddPhotoResult,
+  type OwnPhotoView,
+  type PhotoReview,
+  type PhotoToReview,
   type PhotoVariant,
   type PhotoView,
   type ReorderPhotosResult,

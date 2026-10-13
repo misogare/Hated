@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { feedbackDue, giveFeedback } from '../../src/feedback.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { passMatch, sayHello } from '../../src/results.js';
-import { getRoundReport } from '../../src/round-info.js';
+import { getRoundReport, listRecentRounds } from '../../src/round-info.js';
 import { seedDatabase } from '../../src/seed.js';
 import { createTestClient, hasTestDatabase, resetDatabase } from './database.js';
 import { NOW, member, roundMatching } from './fixtures.js';
@@ -59,6 +59,9 @@ describe.skipIf(!hasTestDatabase)('how a match went (Postgres)', () => {
 
     expect(await giveFeedback(prisma, sam.userId, match.id, 'okay')).toEqual({ ok: true });
     expect((await getRoundReport(prisma, match.roundId))?.feedback).toEqual({ well: 0, okay: 1, notForMe: 0, skipped: 1 });
+    expect(await listRecentRounds(prisma)).toEqual([
+      { id: match.roundId, publishedAt: NOW.toISOString(), population: 2, matched: 2, feedback: { well: 0, okay: 1, notForMe: 0, skipped: 1 } },
+    ]);
   });
 
   it('never asks about a match without both hellos, nor takes an answer for one, or for someone else’s', async () => {

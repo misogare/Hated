@@ -29,7 +29,8 @@ describe.skipIf(!hasTestDatabase)("what a match reads about the other person (Po
   async function addPhotos(userId: string, count: number) {
     for (let index = 0; index < count; index++) {
       const photo = await sharp({ create: { width: 600, height: 750, channels: 3, background: '#c08080' } }).jpeg().toBuffer();
-      const result = await addPhoto(prisma, store, userId, photo);
+      // Approved straight away: this is about what a match sees once photos are allowed.
+      const result = await addPhoto(prisma, store, userId, photo, { review: false });
       if (!result.ok) throw new Error(result.reason);
     }
   }

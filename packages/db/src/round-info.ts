@@ -78,6 +78,45 @@ export interface RoundReport {
   feedback: { well: number; okay: number; notForMe: number; skipped: number };
 }
 
+/** A published round in brief, newest first: its size and how its matches went. */
+export interface RoundSummary {
+  id: string;
+  publishedAt: string;
+  population: number;
+  matched: number;
+  feedback: RoundReport['feedback'];
+}
+
+/** How a round's matches went, counted from everyone's answers (null: rather not say). */
+function tally(answers: ReadonlyArray<string | null>): RoundReport['feedback'] {
+  const count = (answer: string | null) => answers.filter((given) => given === answer).length;
+  return { well: count('well'), okay: count('okay'), notForMe: count('not-for-me'), skipped: count(null) };
+}
+
+/** The latest published rounds, newest first. */
+export async function listRecentRounds(prisma: PrismaClient, options: { limit?: number } = {}): Promise<RoundSummary[]> {
+  const rounds = await prisma.matchRound.findMany({
+    where: { status: 'PUBLISHED' },
+    orderBy: { startedAt: 'desc' },
+    take: options.limit ?? 8,
+    select: {
+      id: true,
+      startedAt: true,
+      completedAt: true,
+      population: true,
+      matched: true,
+      matches: { select: { feedback: { select: { answer: true } } } },
+    },
+  });
+  return rounds.map((round) => ({
+    id: round.id,
+    publishedAt: (round.completedAt ?? round.startedAt).toISOString(),
+    population: round.population,
+    matched: round.matched,
+    feedback: tally(round.matches.flatMap((match) => match.feedback.map((feedback) => feedback.answer))),
+  }));
+}
+
 /** Load a round report, or `null` if no round has that id. */
 export async function getRoundReport(
   prisma: PrismaClient,
@@ -103,8 +142,6 @@ export async function getRoundReport(
 
   if (round === null) return null;
 
-  const answers = round.matches.flatMap((match) => match.feedback.map((feedback) => feedback.answer));
-  const count = (answer: string | null) => answers.filter((given) => given === answer).length;
   return {
     id: round.id,
     status: round.status,
@@ -135,6 +172,6 @@ export async function getRoundReport(
       scoreAB: match.scoreAB,
       scoreBA: match.scoreBA,
     })),
-    feedback: { well: count('well'), okay: count('okay'), notForMe: count('not-for-me'), skipped: count(null) },
+    feedback: tally(round.matches.flatMap((match) => match.feedback.map((feedback) => feedback.answer))),
   };
 }

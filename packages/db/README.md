@@ -444,6 +444,14 @@ What a match reads before saying hello, besides name and age:
 - **Who sees which version** (`photoAccess`, `readPhoto`): your own in full; a
   match's blurred until both said hello, then in full; nothing for strangers,
   unpublished rounds or ended matches.
+- **Review** (`reviewPhoto`, `listPhotosToReview`): a new photo is `PENDING`
+  until someone approves it (the API's admin page), and only an `APPROVED` one
+  reaches a match, in the match view, the matches list and `photoAccess`. A
+  `REJECTED` one stays its owner's alone and no longer counts toward the two a
+  profile needs. The owner's own photos carry their `review`. `addPhoto` with
+  `review: false` approves straight away (the painted demo portraits, or a
+  server with reviewing off); photos from before reviews existed were approved
+  by the migration.
 - **Words** (`saveWords`): one line (up to 120 characters) and up to three
   answers (150 characters each) to the prompts in `PROMPTS`.
 - **Highlights** (`describePerson`): plain phrases from the questionnaire, most

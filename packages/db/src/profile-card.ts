@@ -23,13 +23,18 @@ export interface ProfileCard {
 /** The questionnaire answer that names an ideal weekend. */
 const WEEKEND_QUESTION = 'weekend';
 
-export async function profileCard(prisma: PrismaClient, profileId: string): Promise<ProfileCard> {
+/** `approvedOnly`: the card as a match sees it, with only the photos that passed review. */
+export async function profileCard(prisma: PrismaClient, profileId: string, options: { approvedOnly?: boolean } = {}): Promise<ProfileCard> {
   const profile = await prisma.profile.findUniqueOrThrow({
     where: { id: profileId },
     select: {
       bio: true,
       prompts: { orderBy: { position: 'asc' }, select: { key: true, answer: true } },
-      photos: { orderBy: { position: 'asc' }, select: { id: true, width: true, height: true } },
+      photos: {
+        where: options.approvedOnly ? { status: 'APPROVED' } : {},
+        orderBy: { position: 'asc' },
+        select: { id: true, width: true, height: true },
+      },
       traits: { select: { key: true, value: true } },
       responses: {
         orderBy: { submittedAt: 'desc' },

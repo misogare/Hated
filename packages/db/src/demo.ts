@@ -181,7 +181,8 @@ export async function seedDemoPopulation(prisma: PrismaClient, options: DemoOpti
 
     if (options.photos !== undefined) {
       for (const photo of await demoPortraits(rng)) {
-        const added = await addPhoto(prisma, options.photos, user.id, photo);
+        // Painted, never of anyone real: they need no review.
+        const added = await addPhoto(prisma, options.photos, user.id, photo, { review: false });
         if (!added.ok) throw new Error(`a demo photo for ${name} was refused`);
       }
     }

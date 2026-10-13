@@ -3,8 +3,21 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { createMemoryPhotoStore } from '../../src/photo-store.js';
-import { addPhoto, deletePhoto, listPhotos, photoAccess, readPhoto, reorderPhotos, type PhotoView } from '../../src/photos.js';
-import { passMatch, sayHello } from '../../src/results.js';
+import { listMatches } from '../../src/matches.js';
+import {
+  addPhoto,
+  deletePhoto,
+  listPhotos,
+  listPhotosToReview,
+  photoAccess,
+  readPhoto,
+  readPhotoForReview,
+  reorderPhotos,
+  reviewPhoto,
+  type OwnPhotoView,
+} from '../../src/photos.js';
+import { getAccount } from '../../src/profiles.js';
+import { getMatch, passMatch, sayHello } from '../../src/results.js';
 import { seedDatabase } from '../../src/seed.js';
 import { createTestClient, hasTestDatabase, resetDatabase } from './database.js';
 import { member, roundMatching } from './fixtures.js';
@@ -29,8 +42,9 @@ describe.skipIf(!hasTestDatabase)('photos (Postgres)', () => {
     await prisma?.$disconnect();
   });
 
-  async function upload(userId: string, background?: string): Promise<PhotoView> {
-    const result = await addPhoto(prisma, store, userId, await jpeg(background));
+  /** Approved straight away unless `review`: most of these tests are about photos a match may see. */
+  async function upload(userId: string, background?: string, options: { review: boolean } = { review: false }): Promise<OwnPhotoView> {
+    const result = await addPhoto(prisma, store, userId, await jpeg(background), options);
     if (!result.ok) throw new Error(`upload refused: ${result.reason}`);
     return result.photo;
   }
@@ -134,6 +148,60 @@ describe.skipIf(!hasTestDatabase)('photos (Postgres)', () => {
       expect(await photoAccess(prisma, sam.userId, photo.id)).toBeNull();
       expect(await readPhoto(prisma, store, sam.userId, photo.id, 'blurred')).toBeNull();
       expect(await photoAccess(prisma, sam.userId, 'no-such-photo')).toBeNull();
+    });
+  });
+
+  describe('review', () => {
+    it('keeps a new photo from matches until it is approved, and a rejected one for good', async () => {
+      const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+      const maya = await member(prisma, 'maya@vu.edu.au', 'Maya', 'woman', []);
+      const match = await roundMatching(prisma, sam.profileId, maya.profileId);
+      const photo = await upload(maya.userId, '#c08080', { review: true });
+
+      expect(photo.review).toBe('pending');
+      expect(await photoAccess(prisma, maya.userId, photo.id)).toBe('full');
+      expect(await photoAccess(prisma, sam.userId, photo.id)).toBeNull();
+      expect((await getMatch(prisma, sam.userId, match.id))?.match.partner.photos).toEqual([]);
+      expect((await listMatches(prisma, sam.userId))[0]?.partner.photo).toBeNull();
+
+      expect(await reviewPhoto(prisma, photo.id, 'approve')).toBe(true);
+      expect(await photoAccess(prisma, sam.userId, photo.id)).toBe('blurred');
+      expect((await getMatch(prisma, sam.userId, match.id))?.match.partner.photos.map((shown) => shown.id)).toEqual([photo.id]);
+      expect((await listMatches(prisma, sam.userId))[0]?.partner.photo?.id).toBe(photo.id);
+
+      expect(await reviewPhoto(prisma, photo.id, 'reject')).toBe(true);
+      expect(await photoAccess(prisma, sam.userId, photo.id)).toBeNull();
+      expect(await listPhotos(prisma, maya.userId)).toEqual([{ ...photo, review: 'rejected' }]);
+      expect(await reviewPhoto(prisma, 'no-such-photo', 'approve')).toBe(false);
+    });
+
+    it('lists photos waiting for a review, oldest first, and shows them to the reviewer in full', async () => {
+      const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+      const maya = await member(prisma, 'maya@vu.edu.au', 'Maya', 'woman', []);
+      const second = await upload(maya.userId, '#222222', { review: true });
+      const first = await upload(sam.userId, '#111111', { review: true });
+      await upload(maya.userId, '#333333');
+      await prisma.photo.update({ where: { id: first.id }, data: { createdAt: new Date('2026-10-01T00:00:00Z') } });
+
+      expect((await listPhotosToReview(prisma)).map((waiting) => [waiting.id, waiting.ownerName])).toEqual([
+        [first.id, 'Sam'],
+        [second.id, 'Maya'],
+      ]);
+      expect((await sharp((await readPhotoForReview(prisma, store, first.id))!).metadata()).width).toBe(600);
+      expect(await readPhotoForReview(prisma, store, 'no-such-photo')).toBeNull();
+
+      await reviewPhoto(prisma, first.id, 'approve');
+      expect((await listPhotosToReview(prisma)).map((waiting) => waiting.id)).toEqual([second.id]);
+    });
+
+    it('counts a rejected photo out of the two a profile needs', async () => {
+      const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+      const one = await upload(sam.userId, '#111111', { review: true });
+      await upload(sam.userId, '#222222', { review: true });
+
+      expect((await getAccount(prisma, sam.userId))?.onboarding.photos).toBe(true);
+      await reviewPhoto(prisma, one.id, 'reject');
+      expect((await getAccount(prisma, sam.userId))?.onboarding.photos).toBe(false);
     });
   });
 });

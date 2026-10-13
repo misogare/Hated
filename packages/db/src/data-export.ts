@@ -54,7 +54,8 @@ export interface AccountExport {
     updatedAt: string;
   } | null;
   /** Main first, each as the JPEG HateD keeps (never the blurred copy), base64-encoded. */
-  photos: Array<{ position: number; width: number; height: number; addedAt: string; jpegBase64: string | null }>;
+  /** `review`: whether a match could see it ("approved"), or it was waiting ("pending") or turned down ("rejected"). */
+  photos: Array<{ position: number; width: number; height: number; addedAt: string; review: string; jpegBase64: string | null }>;
   answers: Array<{ question: string; prompt: string; answer: unknown; firstAnsweredAt: string }>;
   /** What matching uses, worked out from the answers: each trait from 0 to 1. */
   traits: Record<string, number>;
@@ -142,6 +143,7 @@ export async function exportAccount(
       width: photo.width,
       height: photo.height,
       addedAt: iso(photo.createdAt),
+      review: photo.status.toLowerCase(),
       jpegBase64: (await store.get(photoKey(photo.id, 'full')))?.toString('base64') ?? null,
     })),
   );

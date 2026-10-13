@@ -169,17 +169,28 @@ model Profile {
 /// kept: the photo store holds a resized copy with its metadata stripped, and a
 /// heavily blurred copy, which is all a match sees until both have said hello.
 /// Files are keyed by the photo's id.
+/// Whether a photo may be shown to anyone but its owner: a new one waits for a
+/// review (unless reviewing is off), and only an approved one reaches matches.
+enum PhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Photo {
-  id        String   @id @default(cuid())
-  profileId String
-  position  Int
-  width     Int
-  height    Int
-  createdAt DateTime @default(now())
+  id         String      @id @default(cuid())
+  profileId  String
+  position   Int
+  width      Int
+  height     Int
+  status     PhotoStatus @default(PENDING)
+  reviewedAt DateTime?
+  createdAt  DateTime    @default(now())
 
   profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, position])
+  @@index([status])
   @@map("photos")
 }
 

@@ -9,7 +9,7 @@
 
 import type { PrismaClient } from './generated/prisma/client.js';
 import { toPrefs, type NotificationPrefs } from './notification-prefs.js';
-import { MIN_PHOTOS, type PhotoView } from './photos.js';
+import { MIN_PHOTOS, listPhotos, type OwnPhotoView } from './photos.js';
 import { profileCard } from './profile-card.js';
 import type { PromptAnswer } from './profile-words.js';
 
@@ -54,7 +54,7 @@ export interface AccountView {
     highlights: string[];
   } | null;
   /** Their photos, main first. */
-  photos: PhotoView[];
+  photos: OwnPhotoView[];
   /** Which onboarding steps are done, so the app knows where to resume. */
   onboarding: { profile: boolean; answers: boolean; photos: boolean };
   /** Which push notifications they want. */
@@ -159,6 +159,7 @@ export async function getAccount(
   const profile = user.profile;
   const institution = user.verifications[0]?.institution ?? null;
   const card = profile === null ? null : await profileCard(prisma, profile.id);
+  const photos = profile === null ? [] : await listPhotos(prisma, userId);
   return {
     userId: user.id,
     email: user.email,
@@ -178,11 +179,12 @@ export async function getAccount(
             prompts: card?.prompts ?? [],
             highlights: card?.highlights ?? [],
           },
-    photos: card?.photos ?? [],
+    photos,
     onboarding: {
       profile: profile !== null,
       answers: (profile?.responses.length ?? 0) > 0,
-      photos: (card?.photos.length ?? 0) >= MIN_PHOTOS,
+      // A rejected photo doesn't count: they need another in its place.
+      photos: photos.filter((photo) => photo.review !== 'rejected').length >= MIN_PHOTOS,
     },
     notifications: toPrefs(user),
   };

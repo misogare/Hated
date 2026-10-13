@@ -61,7 +61,7 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
     id: true,
     displayName: true,
     birthDate: true,
-    photos: { orderBy: { position: 'asc' as const }, take: 1, select: { id: true, width: true, height: true } },
+    photos: { where: { status: 'APPROVED' as const }, orderBy: { position: 'asc' as const }, take: 1, select: { id: true, width: true, height: true } },
     user: {
       select: {
         verifications: {
