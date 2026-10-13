@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "HateD - one-shot stable-match dating. Monorepo root.",
+  "license": "MIT",
   "workspaces": [
     "packages/*"
   ],
