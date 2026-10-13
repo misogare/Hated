@@ -40,15 +40,35 @@ for quick layout checks; the phone is the real target.
 | `src/session.tsx` | The session: token in the keychain/keystore (`expo-secure-store`), the account, and an API client that signs out on any 401. |
 | `src/api/client.ts` | Typed calls to the API, plus friendly wording for its errors. |
 | `src/notifications.ts` | Push notifications: permission, registering this device with the API, and opening the screen a tapped notification is about. |
-| `src/theme.ts` | Colours and fonts. Day palette for sign-in and profile; night palette for rounds. |
-| `src/components/` | Screen, text, buttons, chips, fields, progress. |
+| `src/theme.ts` | Colours, fonts and shadows. Day palette for sign-in and profile; night palette for rounds. |
+| `src/motion.ts` | The native-driver flag and `useReducedMotion`: nothing animates for someone who asked their device for less motion. |
+| `src/components/` | Screen, text, buttons, chips, fields and progress, plus the look's own pieces (see [Design](#design)). |
 | `src/copy.ts` | Slider phrases and labels per trait, the gender vocabulary, round-time formatting. |
 
-Onboarding resumes where it was left: `start` reads the account's onboarding
-progress. The questionnaire saves each answer as it goes, and the profile,
-answers and "what matters" screens double as editors from home (`?edit=1`).
+Onboarding has four steps (about you, the questions, what matters, photos and
+words) and resumes where it was left: `start` reads the account's onboarding
+progress. The questionnaire saves each answer as it goes, and every step doubles
+as an editor from settings or home (`?edit=1`).
 
-Chat opens from home or the reveal once both people have said hello. It polls
+**Photos and words** (`onboarding/photos`) takes two to six photos from the
+library (`expo-image-picker`). Each is resized to at most 1600 pixels and turned
+into JPEG on the phone (`expo-image-manipulator`; iPhones pick HEIC) before
+upload. "See them as your match will" shows the blurred copies the server makes.
+Below go a line about yourself, two prompt answers, and the highlights the API
+works out from the questionnaire. Finishing needs two photos.
+
+Photos are fetched with `expo-image`, sending the session token, so the API
+decides on every request what this person may see: a match's photos blurred
+until both have said hello, then the real ones fading in over the blurred.
+
+**The reveal** opens a sealed envelope, then the other person's profile. After
+"Say hello" it looks for their hello every four seconds; once both have, the
+circles meet, the photos unblur, and the chat opens by itself, for whichever of
+the two said hello first as well as the one who completed it. `?matchId=` opens
+any earlier match the same way.
+
+Chat opens from home, the reveal or the matches list once both people have said
+hello; an empty conversation suggests three openers from what the two share. It polls
 for new messages every 3 seconds while the screen is open, and closes for both
 if either passes or reports. "Your matches" lists every match from every round
 with its last message, so earlier conversations stay reachable; unread counts
@@ -57,6 +77,22 @@ show there, on its tile on home, and on the "Open chat" button.
 "What matters" starts each trait not yet saved at "Nice to have", aimed at the
 middle of the scale, as in the prototype. "Don't mind" leaves a trait out of
 matching entirely.
+
+## Design
+
+"Candlelight", evolved from the first prototype (both are pages of the design
+canvas). Day palette (blush paper, wine ink, rose) for signing in and the
+profile; evening palette (wine, honey, rose) for everything about rounds. Fraunces
+for display, with its italic for the moments that matter; Figtree for the rest.
+
+| Component | What |
+| --- | --- |
+| `Glow` | Candlelight: a soft radial pool, in SVG (`react-native-svg`), since views can't draw radial gradients. `<Screen glow>` puts one behind an evening screen. |
+| `MeetingCircles` | The mark: two circles with a spark where they overlap. They drift on the welcome screen and come together when both say hello. |
+| `Candle` | Home's countdown: it burns down over the week, its flame flickering. |
+| `Envelope` | The sealed match; the wax seal breaks and the flap lifts. |
+| `ProfilePhoto`, `Avatar` | A photo, blurred or not, fetched with the session's token. |
+| `Quote`, `PromptCard`, `Highlights`, `Reasons` | The parts of a profile. |
 
 ## Privacy
 
