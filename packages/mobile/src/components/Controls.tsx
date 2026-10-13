@@ -1,8 +1,10 @@
 import Feather from '@expo/vector-icons/Feather';
-import { router } from 'expo-router';
+import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View, type TextInputProps } from 'react-native';
 
+import { goBack } from '@/navigation';
+import { useSession } from '@/session';
 import { day, fonts, night, type Tone } from '@/theme';
 
 /**
@@ -15,13 +17,19 @@ export function NightSwitch(props: { accessibilityLabel: string; value: boolean;
   return <Switch {...props} trackColor={{ false: night.line, true: night.honey }} thumbColor={night.text} {...web} />;
 }
 
-/** Round back button; goes back in the stack unless told where to go. */
-export function BackButton({ tone = 'day', onPress }: { tone?: Tone; onPress?: () => void }) {
+/**
+ * Round back button. Goes back in the stack; when nothing is behind this
+ * screen (it was opened by a redirect, a link or a refresh), it goes to
+ * `fallback` instead: by default home when signed in, the welcome screen when not.
+ */
+export function BackButton({ tone = 'day', onPress, fallback }: { tone?: Tone; onPress?: () => void; fallback?: Href }) {
+  const { status } = useSession();
+  const parent: Href = fallback ?? (status === 'signed-in' ? '/home' : '/');
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Back"
-      onPress={onPress ?? (() => router.back())}
+      onPress={onPress ?? (() => goBack(parent))}
       style={[styles.back, { backgroundColor: tone === 'day' ? day.tint : night.surface }]}
     >
       <Feather name="chevron-left" size={22} color={tone === 'day' ? day.ink : night.text} />

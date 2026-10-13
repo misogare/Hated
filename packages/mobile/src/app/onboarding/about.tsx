@@ -8,6 +8,7 @@ import { BackButton, Chip, Field, Notice, Steps } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Label, Title } from '@/components/Text';
 import { GENDERS } from '@/copy';
+import { goBack } from '@/navigation';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -43,7 +44,7 @@ export default function About() {
     try {
       await api.saveProfile({ displayName: name.trim(), birthDate, gender, seeking });
       await refresh();
-      if (editing) router.back();
+      if (editing) goBack('/settings');
       else router.push('/onboarding/questions');
     } catch (caught) {
       setError(describeError(caught));
@@ -55,7 +56,7 @@ export default function About() {
   return (
     <Screen scroll footer={<Button label={editing ? 'Save' : 'Continue'} onPress={() => void save()} disabled={!ready} busy={busy} />}>
       <View style={styles.top}>
-        {editing ? <BackButton /> : null}
+        {editing ? <BackButton fallback="/settings" /> : null}
         {editing ? null : (
           <View style={styles.fill}>
             <Steps step={1} total={4} />

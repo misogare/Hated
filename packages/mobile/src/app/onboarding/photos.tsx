@@ -14,6 +14,7 @@ import { ProfilePhoto } from '@/components/Photo';
 import { Highlights } from '@/components/Profile';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
+import { goBack } from '@/navigation';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -117,7 +118,7 @@ export default function PhotosAndWords() {
     try {
       await api.saveWords({ bio: bio.trim() === '' ? null : bio, prompts });
       await refresh();
-      if (editing) router.back();
+      if (editing) goBack('/home');
       else router.push('/onboarding/done');
     } catch (caught) {
       setError(describeError(caught));
@@ -139,7 +140,7 @@ export default function PhotosAndWords() {
       }
     >
       <View style={styles.top}>
-        <BackButton />
+        <BackButton fallback={editing ? '/home' : '/onboarding/hopes'} />
         {editing ? null : (
           <View style={styles.steps}>
             <Steps step={4} total={4} />

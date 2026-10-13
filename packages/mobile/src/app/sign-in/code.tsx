@@ -61,7 +61,7 @@ export default function SignInCode() {
     <Screen
       footer={<Button label="Continue" onPress={() => void verify(code)} disabled={code.length < CODE_LENGTH || locked} busy={busy} />}
     >
-      <BackButton />
+      <BackButton fallback="/sign-in/email" />
       <Title style={styles.title}>Check your inbox</Title>
       <Body style={styles.lede}>
         We sent a 6-digit code to <Text style={styles.email}>{params.email}</Text>. It expires in 10 minutes.

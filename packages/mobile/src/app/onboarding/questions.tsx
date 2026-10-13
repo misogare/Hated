@@ -10,6 +10,7 @@ import { BackButton, Notice, Steps } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
 import { capitalize, choiceList, scaleLabels, scalePhrase } from '@/copy';
+import { goBack } from '@/navigation';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -60,7 +61,7 @@ export default function Questions() {
         return;
       }
       await refresh();
-      if (editing) router.back();
+      if (editing) goBack('/settings');
       else router.push('/onboarding/hopes');
     } catch (caught) {
       setError(describeError(caught));
@@ -71,8 +72,7 @@ export default function Questions() {
 
   function back() {
     if (index > 0) setIndex(index - 1);
-    else if (router.canGoBack()) router.back();
-    else router.replace('/onboarding/about');
+    else goBack(editing ? '/settings' : '/onboarding/about');
   }
 
   return (

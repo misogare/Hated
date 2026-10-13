@@ -10,6 +10,7 @@ import { BackButton, Notice, Steps } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
 import { scaleLabels, traitTitle } from '@/copy';
+import { goBack } from '@/navigation';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -58,7 +59,7 @@ export default function Hopes() {
     setError(null);
     try {
       await api.saveDesires(Object.fromEntries(traits.map((trait) => [trait.traitKey!, desireFor(trait.traitKey!)])));
-      if (editing) router.back();
+      if (editing) goBack('/settings');
       else router.push('/onboarding/photos');
     } catch (caught) {
       setError(describeError(caught));
@@ -73,7 +74,7 @@ export default function Hopes() {
       footer={<Button label={editing ? 'Save' : 'Next: photos and words'} onPress={() => void save()} disabled={traits === null} busy={busy} />}
     >
       <View style={styles.top}>
-        <BackButton />
+        <BackButton fallback={editing ? '/settings' : '/onboarding/questions'} />
         {editing ? null : (
           <View style={styles.fill}>
             <Steps step={3} total={4} />
