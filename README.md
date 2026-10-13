@@ -6,7 +6,8 @@
 </p>
 
 <p align="center">
-  <a href="https://misogare.github.io/Hated/"><strong>Try the demo in your browser →</strong></a>
+  <a href="https://misogare.github.io/Hated/"><strong>Try the demo in your browser →</strong></a><br>
+  <sub>Sign in with the address it fills in and the code <strong>123456</strong>. No email is sent.</sub>
 </p>
 
 <p align="center">
@@ -216,8 +217,10 @@ npm run lint -w @hated/mobile
 runs in your browser ([`packages/mobile/src/demo`](packages/mobile/src/demo)),
 with eight made-up people and painted portraits, never photos of real people.
 They play their part: one says hello back while you wait, one has already
-said it, one never does, and they answer in the chat. Your demo account stays
-in your browser. `npm run demo` serves it locally, with no API or database.
+said it, one never does, and they answer in the chat. Sign in with any
+school-style address (one is filled in for you) and the one-time code
+`123456`: no email is sent, and your demo account stays in your browser.
+`npm run demo` serves it locally, with no API or database.
 
 Every push to `main` builds the demo and publishes it to GitHub Pages
 ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).

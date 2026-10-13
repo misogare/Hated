@@ -181,8 +181,10 @@ back a few seconds after you do, the next has already said it, and the one
 after never does, so you can watch a match close when its 24 hours run out.
 They answer in the chat, too. Rounds are weekly, so home gets a button that
 skips ahead to the next one, moving everything before it a week into the past.
-The account lives in this browser's storage only (`hated.demo`), and deleting
-it in settings clears it.
+Sign-in takes any school-style address (one is filled in) and the code
+`123456` (`DEMO_CODE` in `src/demo/server.ts`), and sends no email. The account
+lives in this browser's storage only (`hated.demo`), and deleting it in
+settings clears it.
 
 ```bash
 npm run demo                             # from the repo root: the demo on the dev server
