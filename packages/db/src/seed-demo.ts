@@ -2,7 +2,8 @@
 /**
  * Fill the development database with a fictional demo population, so a round
  * has people to match. Replaces any earlier demo population; real accounts are
- * never touched.
+ * never touched. Their photos go where the API keeps photos (PHOTO_DIR, or
+ * packages/db/data/photos).
  *
  * Usage:
  *   npm run seed:demo                 # 24 demo members
@@ -20,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DEMO_DOMAIN, clearDemoPopulation, seedDemoPopulation } from './demo.js';
 import { createPrismaClient } from './index.js';
+import { createDiskPhotoStore, defaultPhotoDir } from './photo-store.js';
 import { seedDatabase } from './seed.js';
 
 interface CliArgs {
@@ -71,14 +73,15 @@ async function main(): Promise<void> {
   }
 
   const prisma = createPrismaClient();
+  const photos = createDiskPhotoStore(process.env.PHOTO_DIR?.trim() || defaultPhotoDir());
   try {
     if (args.clear) {
-      const removed = await clearDemoPopulation(prisma);
+      const removed = await clearDemoPopulation(prisma, photos);
       console.log(`Removed ${removed} demo member${removed === 1 ? '' : 's'}.`);
       return;
     }
     await seedDatabase(prisma);
-    const summary = await seedDemoPopulation(prisma, { count: args.count, seed: args.seed });
+    const summary = await seedDemoPopulation(prisma, { count: args.count, seed: args.seed, photos });
     console.log('');
     console.log(`  Created ${summary.created} demo members at @${DEMO_DOMAIN}`);
     for (const [label, count] of Object.entries(summary.mix)) console.log(`    ${String(count).padStart(3)}  ${label}`);
