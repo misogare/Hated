@@ -231,6 +231,10 @@ export interface Match {
   reasons: string[];
   /** Ways to start the conversation, from the partner's prompts and what the two share. */
   openers: string[];
+  /** When the window to say hello closes (24 hours after the round, by default). */
+  helloDeadline: string;
+  /** The window closed before both said hello: the match is over. */
+  expired: boolean;
   saidHello: boolean;
   mutual: boolean;
   passed: boolean;
@@ -255,6 +259,9 @@ export interface MatchSummary {
   passed: boolean;
   /** Both said hello and neither passed: the photo can be fetched in full. */
   photosUnlocked: boolean;
+  helloDeadline: string;
+  /** The window closed before both said hello. */
+  expired: boolean;
   lastMessage: { body: string; sentAt: string; mine: boolean } | null;
   unread: number;
 }

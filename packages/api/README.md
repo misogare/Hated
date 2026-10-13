@@ -24,6 +24,7 @@ Node 20.19+ (Prisma 7).
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy, so per-IP limits read `X-Forwarded-For`. |
 | `EXPO_ACCESS_TOKEN` | (none) | Only if the Expo project has enhanced push security on. |
 | `PHOTO_DIR` | `packages/db/data/photos` | Where photo files are kept. Git ignores the default. |
+| `HELLO_WINDOW_HOURS` | `24` | How long people have to say hello after a round. A fraction (`0.05` is three minutes) is handy for trying it out. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
 instead of emailed, which is handy for local development.
@@ -59,7 +60,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `GET /matches` | Every match from published rounds, newest first, with main photo, last message and unread count | |
 | `GET /matches/:id` | One match from any published round: the other person's words, highlights and photos, why they fit, and openers | 404 `not-found` |
 | `POST /matches/:id/report` `{ reason, details? }` | Report for review; also ends the match like a pass | 422 `invalid`, 404 `not-found` |
-| `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed` |
+| `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed`, 409 `expired` once the window to say hello has closed |
 | `POST /matches/:id/pass` | Never be matched with them again | 404 `not-found` |
 | `GET /matches/:id/messages?after=<id>` | The conversation, oldest first; with `after`, only newer messages (the app polls this) | 403 `not-mutual` until both said hello, 409 `passed`, 404 `not-found` |
 | `GET /live` (WebSocket) | Live updates while the app is open; see below | closes with 4001 if the session is refused |
@@ -67,6 +68,15 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 
 Errors are always `{ error, problems?, attemptsRemaining?, retryAfterSeconds? }`;
 internal errors are logged and returned as a bare `{ error: "internal" }`.
+
+## The window to say hello
+
+A round's matches have 24 hours (`HELLO_WINDOW_HOURS`) from when it is
+published for both people to say hello. Each match carries its `helloDeadline`
+and `expired`. After the deadline a hello is refused (409 `expired`) and a match
+that isn't mutual is over; one that became mutual in time stays open. It reads
+the same to both people, so the one who didn't say hello never learns whether
+the other did. The round's push says how long there is.
 
 ## Live updates
 

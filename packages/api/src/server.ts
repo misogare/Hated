@@ -10,8 +10,10 @@
  * (SUN, 20:00, Australia/Melbourne); ROUND_AUTORUN=false to stop this server
  * running rounds itself; TRUST_PROXY=true behind a reverse proxy, so the
  * per-IP sign-in limits read X-Forwarded-For; EXPO_ACCESS_TOKEN if the Expo
- * project requires one for sending push notifications; and PHOTO_DIR for where
- * photos are kept (packages/db/data/photos).
+ * project requires one for sending push notifications; PHOTO_DIR for where
+ * photos are kept (packages/db/data/photos); and HELLO_WINDOW_HOURS, how long
+ * people have to say hello after a round (24; a fraction, e.g. 0.05 for three
+ * minutes, is handy for trying it out).
  *
  * Apps also keep a WebSocket open at /live for live updates (see
  * live-server.ts); the events reach it through Postgres, from this server, any
@@ -32,6 +34,7 @@ import {
   createPrismaClient,
   defaultPhotoDir,
   describeMailConfig,
+  describeWindow,
   listenLive,
   resolveMailConfig,
   runScheduledRound,
@@ -67,6 +70,10 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 }
 
+const helloWindowHours = Number(process.env.HELLO_WINDOW_HOURS?.trim() || '24');
+if (!Number.isFinite(helloWindowHours) || helloWindowHours <= 0) fail('HELLO_WINDOW_HOURS must be a number of hours above 0.');
+const helloWindowMs = Math.round(helloWindowHours * 3_600_000);
+
 /** Behind a proxy every request comes from the proxy, so read the forwarded address. */
 const trustProxy = (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true';
 
@@ -81,10 +88,11 @@ const photos = createDiskPhotoStore(photoDir);
 const notifier = combineNotifiers(
   createNotifier(prisma, createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined }), {
     log: (line) => console.error(`[push] ${line}`),
+    helloWindowMs,
   }),
   createLiveNotifier(prisma, { log: (line) => console.error(`[live] ${line}`) }),
 );
-const services = createDbServices(prisma, createMailer(mailConfig), photos);
+const services = createDbServices(prisma, createMailer(mailConfig), photos, { helloWindowMs });
 const app = createApp({
   notifier,
   services,
@@ -121,6 +129,7 @@ const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
     `  rounds   ${process.env.ROUND_DAY ?? 'SUN'} ${process.env.ROUND_TIME ?? '20:00'} ${schedule.timeZone}, ` +
       (autorun ? `run automatically; next ${nextRoundAt(new Date(), schedule).toISOString()}` : 'run by hand (ROUND_AUTORUN=false)'),
   );
+  console.log(`  hello    ${describeWindow(helloWindowMs)} to say hello after a round`);
   if (mailConfig.kind === 'console') console.log('  sign-in codes are printed here, not emailed');
 });
 

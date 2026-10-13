@@ -43,7 +43,13 @@ import {
 
 import type { ApiServices } from './app.js';
 
-export function createDbServices(prisma: PrismaClient, mailer: Mailer, photos: PhotoStore): ApiServices {
+export function createDbServices(
+  prisma: PrismaClient,
+  mailer: Mailer,
+  photos: PhotoStore,
+  /** How long people have to say hello after a round. Default 24 hours. */
+  window: { helloWindowMs?: number } = {},
+): ApiServices {
   return {
     startSignIn: (email) => startSignIn(prisma, { email }, { mailer }),
     verifyCode: (input) => verifyCode(prisma, input),
@@ -59,12 +65,12 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer, photos: P
     saveAnswers: (userId, answers) => saveAnswers(prisma, userId, answers),
     getDesires: (userId) => getDesires(prisma, userId),
     saveDesires: (userId, desires) => saveDesires(prisma, userId, desires),
-    getLatestResult: (userId) => getLatestResult(prisma, userId),
-    sayHello: (userId, matchId) => sayHello(prisma, userId, matchId),
+    getLatestResult: (userId) => getLatestResult(prisma, userId, window),
+    sayHello: (userId, matchId) => sayHello(prisma, userId, matchId, window),
     passMatch: (userId, matchId) => passMatch(prisma, userId, matchId),
     listMessages: (userId, matchId, after) => listMessages(prisma, userId, matchId, { after }),
     sendMessage: (userId, matchId, body) => sendMessage(prisma, userId, matchId, body),
-    listMatches: (userId) => listMatches(prisma, userId),
+    listMatches: (userId) => listMatches(prisma, userId, window),
     reportMatch: (userId, matchId, input) => reportMatch(prisma, userId, matchId, input),
     registerPushToken: (userId, token, platform) => registerPushToken(prisma, userId, token, platform),
     unregisterPushToken: (userId, token) => unregisterPushToken(prisma, userId, token),
@@ -79,6 +85,6 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer, photos: P
     readPhoto: (userId, photoId, variant) => readPhoto(prisma, photos, userId, photoId, variant),
     saveWords: (userId, input) => saveWords(prisma, userId, input),
     promptChoices: () => PROMPTS.map((prompt) => ({ key: prompt.key, label: prompt.label })),
-    getMatch: (userId, matchId) => getMatch(prisma, userId, matchId),
+    getMatch: (userId, matchId) => getMatch(prisma, userId, matchId, window),
   };
 }
