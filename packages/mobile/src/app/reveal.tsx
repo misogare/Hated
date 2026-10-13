@@ -1,63 +1,118 @@
 import type { Match } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
-import { Redirect, router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { describeError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { BackButton, Notice } from '@/components/Controls';
+import { Envelope } from '@/components/Envelope';
+import { MeetingCircles } from '@/components/MeetingCircles';
+import { LockBadge, ProfilePhoto } from '@/components/Photo';
+import { Highlights, PromptCard, Quote, Reasons } from '@/components/Profile';
 import { Screen } from '@/components/Screen';
-import { Body, Eyebrow, Heading, Title } from '@/components/Text';
+import { Body, Eyebrow } from '@/components/Text';
+import { NATIVE_DRIVER } from '@/motion';
 import { useSession } from '@/session';
-import { fonts, night } from '@/theme';
+import { fonts, night, shadows } from '@/theme';
 
-type Step = 'sealed' | 'deciding' | 'confirming-pass' | 'said-hello' | 'passed';
+/**
+ * - sealed / opening: the envelope, before and while it opens.
+ * - deciding / confirming-pass: reading the profile, then hello or pass.
+ * - waiting: said hello; watching for theirs.
+ * - meeting: it just became mutual; the circles meet, then the chat opens.
+ * - together: it was already mutual when this screen opened.
+ * - passed: the match has ended.
+ */
+type Step = 'sealed' | 'opening' | 'deciding' | 'confirming-pass' | 'waiting' | 'meeting' | 'together' | 'passed';
 
-/** The one-match reveal: sealed until opened, then hello or pass. */
+/** How often to look for the other person's hello while waiting here. */
+const WATCH_MS = 4000;
+/** How long the "you both said hello" moment lasts before the chat opens. */
+const MEETING_MS = 2600;
+
+function stepFor(match: Match): Step {
+  if (match.passed) return 'passed';
+  if (match.mutual) return 'together';
+  if (match.saidHello) return 'waiting';
+  return 'sealed';
+}
+
+/**
+ * The one-match reveal: sealed until opened, then the other person's profile
+ * and hello or pass. This round's match by default, or any match with
+ * `?matchId=`.
+ */
 export default function Reveal() {
+  const { matchId: wanted } = useLocalSearchParams<{ matchId?: string }>();
   const { api } = useSession();
   const [match, setMatch] = useState<Match | null | undefined>(undefined);
   const [step, setStep] = useState<Step>('sealed');
-  const [mutual, setMutual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.home().then(
-      (home) => {
-        if (home.result.status !== 'matched') return setMatch(null);
-        const found = home.result.match;
+    const load = wanted
+      ? api.match(wanted).then((detail) => detail.match)
+      : api.home().then((home) => (home.result.status === 'matched' ? home.result.match : null));
+    load.then(
+      (found) => {
         setMatch(found);
-        setMutual(found.mutual);
-        // Already acted on: skip the envelope.
-        if (found.passed) setStep('passed');
-        else if (found.saidHello) setStep('said-hello');
+        if (found !== null) setStep(stepFor(found));
       },
       (caught: unknown) => setError(describeError(caught)),
     );
-  }, [api]);
+  }, [api, wanted]);
+
+  const matchId = match?.matchId;
+
+  /** Fetch the match again, e.g. to pick up unlocked photos. Returns it. */
+  const reload = useCallback(async () => {
+    if (matchId === undefined) return null;
+    const { match: fresh } = await api.match(matchId);
+    setMatch(fresh);
+    return fresh;
+  }, [api, matchId]);
+
+  // While waiting on their hello, look every few seconds; the moment it comes,
+  // celebrate and open the chat.
+  useFocusEffect(
+    useCallback(() => {
+      if (step !== 'waiting') return;
+      const timer = setInterval(() => {
+        reload().then(
+          (fresh) => {
+            if (fresh?.passed) setStep('passed');
+            else if (fresh?.mutual) setStep('meeting');
+          },
+          () => undefined,
+        );
+      }, WATCH_MS);
+      return () => clearInterval(timer);
+    }, [step, reload]),
+  );
 
   if (match === null) return <Redirect href="/home" />;
   if (match === undefined) {
     return (
-      <Screen tone="night">
+      <Screen tone="night" glow>
         <View style={styles.center}>{error === null ? <ActivityIndicator color={night.honey} /> : <Notice tone="night" kind="error">{error}</Notice>}</View>
       </Screen>
     );
   }
 
-  async function act(action: 'hello' | 'pass') {
+  async function sayHello() {
     if (match === null || match === undefined) return;
     setBusy(true);
     setError(null);
     try {
-      if (action === 'hello') {
-        setMutual((await api.sayHello(match.matchId)).mutual);
-        setStep('said-hello');
+      const { mutual } = await api.sayHello(match.matchId);
+      if (mutual) {
+        setStep('meeting');
+        await reload();
       } else {
-        await api.pass(match.matchId);
-        setStep('passed');
+        setStep('waiting');
       }
     } catch (caught) {
       setError(describeError(caught));
@@ -66,117 +121,185 @@ export default function Reveal() {
     }
   }
 
-  if (step === 'sealed') {
+  async function pass() {
+    if (match === null || match === undefined) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.pass(match.matchId);
+      setStep('passed');
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (step === 'sealed' || step === 'opening') {
     return (
-      <Screen tone="night" footer={<Button label="Open" tone="night" onPress={() => setStep('deciding')} />}>
+      <Screen
+        tone="night"
+        glow
+        footer={<Button label="Break the seal" tone="night" busy={step === 'opening'} onPress={() => setStep('opening')} style={styles.honey} />}
+      >
         <BackButton tone="night" />
-        <Eyebrow tone="night" style={styles.eyebrow}>
+        <Eyebrow tone="night" style={styles.sealedEyebrow}>
           This round
         </Eyebrow>
-        <Title tone="night" style={styles.sealedTitle}>
-          Your match is here.
-        </Title>
+        <Text accessibilityRole="header" style={styles.sealedTitle}>
+          Your match{'\n'}is here.
+        </Text>
         <View style={styles.envelope}>
-          <View style={styles.seal} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <View style={styles.sealInner}>
-              <Feather name="heart" size={36} color={night.bg} />
-            </View>
-          </View>
-          <Body tone="night" style={styles.envelopeText}>
-            One person, chosen for you this round. Open it when you're ready.
-          </Body>
+          <Envelope opening={step === 'opening'} onOpened={() => setStep('deciding')} />
         </View>
       </Screen>
     );
   }
 
-  const { partner, matchId } = match;
+  const { partner } = match;
+  const [main, ...rest] = partner.photos;
+  const locked = !match.photosUnlocked;
+
   return (
-    <Screen tone="night" scroll footer={renderActions()}>
-      <BackButton tone="night" />
-      <Eyebrow tone="night" style={styles.eyebrowCenter}>
-        You matched with
-      </Eyebrow>
-      <View style={styles.monogram} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Text style={styles.monogramText}>{partner.displayName.slice(0, 1).toUpperCase()}</Text>
+    <Screen tone="night" glow scroll footer={actions()}>
+      <View style={styles.topBar}>
+        <BackButton tone="night" />
+        <Eyebrow tone="night" style={styles.topEyebrow}>
+          Your match
+        </Eyebrow>
+        <View style={styles.topSpacer} />
       </View>
-      <Title tone="night" style={styles.name}>
+
+      {main === undefined ? null : (
+        <View
+          style={styles.gallery}
+          accessible
+          accessibilityLabel={
+            locked
+              ? `${partner.displayName}'s photos, blurred until you both say hello`
+              : `${partner.photos.length} photo${partner.photos.length === 1 ? '' : 's'} of ${partner.displayName}`
+          }
+        >
+          <View style={styles.mainPhoto}>
+            <ProfilePhoto photo={main} unlocked={!locked} style={StyleSheet.absoluteFill} />
+            {locked ? (
+              <View style={styles.lockChip}>
+                <Feather name="lock" size={14} color={night.honey} />
+                <Text style={styles.lockText}>Photos unlock when you both say hello</Text>
+              </View>
+            ) : null}
+          </View>
+          {rest.length === 0 ? null : (
+            <View style={styles.smallPhotos}>
+              {rest.map((photo) => (
+                <View key={photo.id} style={styles.smallPhoto}>
+                  <ProfilePhoto photo={photo} unlocked={!locked} style={StyleSheet.absoluteFill} />
+                  {locked ? (
+                    <View style={styles.smallLock}>
+                      <LockBadge size={22} />
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      <Text accessibilityRole="header" style={styles.name}>
         {partner.displayName}, {partner.age}
-      </Title>
+      </Text>
       <View style={styles.verified}>
-        <Feather name="shield" size={16} color={night.honey} />
+        <Feather name="shield" size={15} color={night.honey} />
         <Body tone="night" style={styles.verifiedText}>
           {partner.institution === null ? 'Verified' : `Verified at ${partner.institution}`}
         </Body>
       </View>
 
-      {match.reasons.length === 0 ? null : (
-        <View style={styles.card}>
-          <Heading tone="night">Why you two</Heading>
-          {match.reasons.map((reason) => (
-            <View key={reason} style={styles.reason}>
-              <View style={styles.reasonDot} />
-              <Text style={styles.reasonText}>{reason}</Text>
-            </View>
-          ))}
+      {partner.bio === null ? null : (
+        <View style={styles.block}>
+          <Quote text={partner.bio} />
         </View>
       )}
+
+      {match.reasons.length === 0 ? null : (
+        <View style={[styles.card, styles.block]}>
+          <Eyebrow tone="night" style={styles.honeyEyebrow}>
+            Why you two
+          </Eyebrow>
+          <Reasons items={match.reasons} />
+        </View>
+      )}
+
+      {partner.prompts.map((prompt) => (
+        <View key={prompt.key} style={styles.prompt}>
+          <PromptCard prompt={prompt} />
+        </View>
+      ))}
+
+      {partner.highlights.length === 0 ? null : (
+        <View style={styles.block}>
+          <Eyebrow tone="night" style={styles.sectionEyebrow}>
+            From {partner.displayName}'s answers
+          </Eyebrow>
+          <Highlights items={partner.highlights} />
+        </View>
+      )}
+
       {error === null ? null : (
-        <View style={styles.errorRow}>
-          <Notice tone="night" kind="error">{error}</Notice>
+        <View style={styles.block}>
+          <Notice tone="night" kind="error">
+            {error}
+          </Notice>
         </View>
       )}
     </Screen>
   );
 
-  function renderActions() {
+  /** The footer for this step. A plain function, not a component, so Waiting and Meeting keep their state across renders. */
+  function actions() {
+    if (match === null || match === undefined) return null;
+    const name = match.partner.displayName;
     switch (step) {
       case 'deciding':
         return (
           <>
-            <Button label="Say hello" tone="night" onPress={() => void act('hello')} busy={busy} />
-            <Button label="Not for me" tone="night" variant="secondary" onPress={() => setStep('confirming-pass')} disabled={busy} />
-            <Button
-              label="Report"
-              tone="night"
-              variant="text"
-              onPress={() => router.push({ pathname: '/report', params: { matchId, name: partner.displayName } })}
-            />
+            <Button label="Say hello" tone="night" onPress={() => void sayHello()} busy={busy} style={styles.honey} />
+            <View style={styles.secondary}>
+              <Button label="Not for me" tone="night" variant="secondary" onPress={() => setStep('confirming-pass')} disabled={busy} style={styles.half} />
+              <Button
+                label="Report"
+                tone="night"
+                variant="text"
+                onPress={() => router.push({ pathname: '/report', params: { matchId: match.matchId, name } })}
+                style={styles.half}
+              />
+            </View>
           </>
         );
       case 'confirming-pass':
         return (
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Pass on {partner.displayName}?</Text>
+            <Text style={styles.sheetTitle}>Pass on {name}?</Text>
             <Text style={styles.sheetBody}>You won't be matched with each other again.</Text>
             <View style={styles.sheetButtons}>
               <Button label="Keep match" variant="secondary" onPress={() => setStep('deciding')} style={styles.sheetButton} />
-              <Button label="Yes, pass" onPress={() => void act('pass')} busy={busy} style={[styles.sheetButton, styles.passButton]} />
+              <Button label="Yes, pass" onPress={() => void pass()} busy={busy} style={[styles.sheetButton, styles.passButton]} />
             </View>
           </View>
         );
-      case 'said-hello':
-        return mutual ? (
+      case 'waiting':
+        return <Waiting name={name} />;
+      case 'meeting':
+        return <Meeting name={name} onDone={() => router.replace({ pathname: '/chat', params: { matchId: match.matchId } })} />;
+      case 'together':
+        return (
           <>
-            <View style={[styles.card, styles.helloCard]}>
-              <Heading tone="night">You both said hello</Heading>
-              <Body tone="night" style={styles.helloText}>
-                {partner.displayName} said hello too, so your conversation is open.
-              </Body>
-            </View>
-            <Button
-              label="Open chat"
-              tone="night"
-              onPress={() => router.push({ pathname: '/chat', params: { matchId } })}
-            />
-          </>
-        ) : (
-          <View style={[styles.card, styles.helloCard]}>
-            <Heading tone="night">Hello sent</Heading>
-            <Body tone="night" style={styles.helloText}>
-              When {partner.displayName} says hello too, a conversation opens for you both.
+            <Body tone="night" style={styles.togetherText}>
+              You both said hello.
             </Body>
-          </View>
+            <Button label="Open chat" tone="night" onPress={() => router.push({ pathname: '/chat', params: { matchId: match.matchId } })} style={styles.honey} />
+          </>
         );
       case 'passed':
       default:
@@ -192,45 +315,127 @@ export default function Reveal() {
   }
 }
 
+/** Hello sent: a soft pulse while the screen watches for theirs. */
+function Waiting({ name }: { name: string }) {
+  const [pulse] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={[styles.card, styles.helloCard]} accessibilityLiveRegion="polite">
+      <Text style={styles.cardTitle}>Hello sent</Text>
+      <Body tone="night" style={styles.cardBody}>
+        We'll open your chat the moment {name} says hello too. You don't need to wait here.
+      </Body>
+      <View style={styles.waitingRow}>
+        <Animated.View
+          style={[
+            styles.waitingDot,
+            { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }), transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] }) }] },
+          ]}
+        />
+        <Text style={styles.waitingText}>Waiting for {name}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Both said hello: the circles meet, the photos unblur, and then the chat opens on its own. */
+function Meeting({ name, onDone }: { name: string; onDone: () => void }) {
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const fill = Animated.timing(progress, { toValue: 1, duration: MEETING_MS, delay: 300, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER });
+    fill.start(({ finished }) => {
+      if (finished) onDone();
+    });
+    return () => fill.stop();
+    // Runs once: the moment plays out, then hands over to the chat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress]);
+
+  return (
+    <View style={[styles.card, styles.helloCard, styles.meeting]} accessibilityLiveRegion="polite">
+      <MeetingCircles size={46} motion="meet" style={styles.meetingCircles} />
+      <Text style={styles.meetingTitle}>You both said hello.</Text>
+      <Body tone="night" style={styles.meetingBody}>
+        {name}'s photos are unlocked. Opening your chat…
+      </Body>
+      <View style={styles.track}>
+        <Animated.View style={[styles.fill, { transform: [{ scaleX: progress }] }]} />
+      </View>
+      <Pressable accessibilityRole="button" onPress={onDone} style={({ pressed }) => [styles.openNow, pressed && styles.pressed]}>
+        <Text style={styles.openNowText}>Open chat now</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { marginTop: 24, textAlign: 'center' },
-  eyebrowCenter: { marginTop: 8, textAlign: 'center' },
-  sealedTitle: { marginTop: 12, textAlign: 'center', fontSize: 40, lineHeight: 43 },
-  envelope: {
-    marginTop: 40,
+  honey: { boxShadow: shadows.honey },
+  sealedEyebrow: { marginTop: 18, textAlign: 'center', fontSize: 12, letterSpacing: 1.8 },
+  sealedTitle: { marginTop: 10, textAlign: 'center', fontFamily: fonts.displayItalic, fontSize: 44, lineHeight: 46, letterSpacing: -0.8, color: night.text },
+  envelope: { flex: 1, justifyContent: 'center', paddingBottom: 24 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topEyebrow: { fontSize: 12, letterSpacing: 1.8 },
+  topSpacer: { width: 44 },
+  gallery: { marginTop: 16, gap: 8 },
+  mainPhoto: { height: 330, borderRadius: 28, overflow: 'hidden', backgroundColor: night.surface },
+  lockChip: {
+    position: 'absolute',
+    bottom: 16,
     alignSelf: 'center',
-    width: 300,
-    height: 330,
-    borderRadius: 32,
-    backgroundColor: night.surface,
-    borderWidth: 1,
-    borderColor: night.line,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 22,
-    padding: 24,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: 'rgba(43, 22, 32, 0.84)',
   },
-  seal: { width: 112, height: 112, borderRadius: 56, backgroundColor: night.ember, alignItems: 'center', justifyContent: 'center' },
-  sealInner: { width: 84, height: 84, borderRadius: 42, backgroundColor: night.honey, alignItems: 'center', justifyContent: 'center' },
-  envelopeText: { textAlign: 'center', fontSize: 15.5, lineHeight: 23, maxWidth: 220 },
-  monogram: { marginTop: 22, alignSelf: 'center', width: 128, height: 128, borderRadius: 64, backgroundColor: night.blush, alignItems: 'center', justifyContent: 'center' },
-  monogramText: { fontFamily: fonts.display, fontSize: 56, color: night.bg },
-  name: { marginTop: 18, textAlign: 'center', fontSize: 40, lineHeight: 43 },
-  verified: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  lockText: { fontFamily: fonts.bodySemi, fontSize: 13.5, color: night.text },
+  smallPhotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  smallPhoto: { flexGrow: 1, flexBasis: '40%', height: 150, borderRadius: 22, overflow: 'hidden', backgroundColor: night.surface },
+  smallLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  name: { marginTop: 22, fontFamily: fonts.display, fontSize: 42, lineHeight: 46, letterSpacing: -0.8, color: night.text },
+  verified: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 },
   verifiedText: { fontSize: 14.5 },
-  card: { marginTop: 26, padding: 20, borderRadius: 22, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, gap: 10 },
-  reason: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  reasonDot: { marginTop: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: night.honey },
-  reasonText: { flex: 1, fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: night.text },
-  errorRow: { marginTop: 16 },
-  sheet: { padding: 20, borderRadius: 22, backgroundColor: night.text },
-  sheetTitle: { fontFamily: fonts.displayBold, fontSize: 20, color: night.bg },
+  block: { marginTop: 20 },
+  card: { padding: 20, borderRadius: 24, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, gap: 12 },
+  honeyEyebrow: { color: night.honey, fontSize: 12, letterSpacing: 1.6 },
+  prompt: { marginTop: 12 },
+  sectionEyebrow: { marginBottom: 12, fontSize: 12, letterSpacing: 1.6 },
+  secondary: { flexDirection: 'row', gap: 10 },
+  half: { flex: 1 },
+  sheet: { padding: 20, borderRadius: 24, backgroundColor: night.text },
+  sheetTitle: { fontFamily: fonts.displayBold, fontSize: 21, color: night.bg },
   sheetBody: { marginTop: 6, fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: '#5E3E4C' },
   sheetButtons: { marginTop: 14, flexDirection: 'row', gap: 10 },
   sheetButton: { flex: 1, height: 48 },
   passButton: { backgroundColor: night.bg },
-  helloCard: { marginTop: 0, borderColor: night.honey },
-  helloText: { fontSize: 14.5, lineHeight: 21 },
+  helloCard: { borderColor: night.honey, gap: 6 },
+  cardTitle: { fontFamily: fonts.displayBold, fontSize: 21, color: night.text },
+  cardBody: { fontSize: 14.5, lineHeight: 21 },
+  waitingRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  waitingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: night.honey },
+  waitingText: { fontFamily: fonts.bodySemi, fontSize: 13.5, color: night.honey },
+  meeting: { alignItems: 'center', boxShadow: shadows.glow },
+  meetingCircles: { alignSelf: 'center' },
+  meetingTitle: { marginTop: 8, fontFamily: fonts.displayItalic, fontSize: 28, lineHeight: 32, color: night.text, textAlign: 'center' },
+  meetingBody: { fontSize: 14.5, textAlign: 'center' },
+  track: { marginTop: 10, alignSelf: 'stretch', height: 4, borderRadius: 2, backgroundColor: night.line, overflow: 'hidden' },
+  fill: { height: 4, backgroundColor: night.honey, transformOrigin: 'left' },
+  openNow: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 22 },
+  openNowText: { fontFamily: fonts.bodySemi, fontSize: 15, color: night.honey, textDecorationLine: 'underline' },
+  pressed: { opacity: 0.7 },
+  togetherText: { textAlign: 'center', fontSize: 15 },
   passed: { textAlign: 'center', fontSize: 15 },
 });
