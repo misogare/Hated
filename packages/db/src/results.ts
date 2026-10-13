@@ -9,9 +9,16 @@
  * have. Whether the other person has said hello is not revealed on its own,
  * only as `mutual`, so nobody learns they were waved at and left on read.
  * Passing blocks the pair, so they are never matched again.
+ *
+ * Before both have said hello, a match reads the other person's words, the
+ * highlights from their answers and blurred photos; after, the photos unlock.
  */
 
+import { suggestOpeners } from './descriptions.js';
 import type { PrismaClient } from './generated/prisma/client.js';
+import type { PhotoView } from './photos.js';
+import { profileCard } from './profile-card.js';
+import type { PromptAnswer } from './profile-words.js';
 import { ageOn } from './profiles.js';
 import { countUnread } from './unread.js';
 
@@ -22,15 +29,32 @@ export interface MatchView {
     age: number;
     /** Where their email was verified, e.g. "Victoria University". */
     institution: string | null;
+    bio: string | null;
+    prompts: PromptAnswer[];
+    /** Worked out from their questionnaire, e.g. "Humor comes first". */
+    highlights: string[];
+    /** Main first. None once the match has ended. */
+    photos: PhotoView[];
   };
+  /** Both have said hello (and neither has passed), so the photos can be seen in full. */
+  photosUnlocked: boolean;
   /** Short, plain reasons the two of them fit. May be empty. */
   reasons: string[];
+  /** Ways to start the conversation, from the partner's prompts and what the two share. */
+  openers: string[];
   saidHello: boolean;
   /** Both have said hello. */
   mutual: boolean;
   passed: boolean;
   /** Messages from the partner not yet read. */
   unread: number;
+}
+
+/** One match, wherever it is in the person's history. */
+export interface MatchDetail {
+  roundId: string;
+  publishedAt: string;
+  match: MatchView;
 }
 
 export type RoundResultView =
@@ -153,14 +177,57 @@ export async function getLatestResult(
   // Show nothing rather than a "no match" that never happened.
   if (match === null) return { status: 'none' };
 
-  const isA = match.profileAId === profile.id;
+  return { status: 'matched', roundId, publishedAt, match: await viewMatch(prisma, profile, match, options.now ?? new Date()) };
+}
+
+/** One of the person's matches from any published round, or null if it isn't theirs. */
+export async function getMatch(
+  prisma: PrismaClient,
+  userId: string,
+  matchId: string,
+  options: { now?: Date } = {},
+): Promise<MatchDetail | null> {
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { id: true, traits: true, desires: true },
+  });
+  if (profile === null) return null;
+
+  const match = await prisma.match.findFirst({
+    where: { id: matchId, round: { status: 'PUBLISHED' }, OR: [{ profileAId: profile.id }, { profileBId: profile.id }] },
+    include: { round: { select: { startedAt: true, completedAt: true } } },
+  });
+  if (match === null) return null;
+  return {
+    roundId: match.roundId,
+    publishedAt: (match.round.completedAt ?? match.round.startedAt).toISOString(),
+    match: await viewMatch(prisma, profile, match, options.now ?? new Date()),
+  };
+}
+
+/** A match from the viewer's side. */
+async function viewMatch(
+  prisma: PrismaClient,
+  viewer: { id: string; traits: Array<{ key: string; value: number }>; desires: Array<{ key: string; target: number; weight: number }> },
+  match: {
+    id: string;
+    profileAId: string;
+    profileBId: string;
+    helloAAt: Date | null;
+    helloBAt: Date | null;
+    readAAt: Date | null;
+    readBAt: Date | null;
+  },
+  now: Date,
+): Promise<MatchView> {
+  const isA = match.profileAId === viewer.id;
   const partnerId = isA ? match.profileBId : match.profileAId;
-  const [partner, block] = await Promise.all([
+  const [partner, card, block] = await Promise.all([
     prisma.profile.findUniqueOrThrow({
       where: { id: partnerId },
-      include: {
-        traits: true,
-        desires: true,
+      select: {
+        displayName: true,
+        birthDate: true,
         user: {
           select: {
             verifications: {
@@ -173,11 +240,12 @@ export async function getLatestResult(
         },
       },
     }),
+    profileCard(prisma, partnerId),
     prisma.profileBlock.findFirst({
       where: {
         OR: [
-          { blockerId: profile.id, blockedId: partnerId },
-          { blockerId: partnerId, blockedId: profile.id },
+          { blockerId: viewer.id, blockedId: partnerId },
+          { blockerId: partnerId, blockedId: viewer.id },
         ],
       },
       select: { blockerId: true },
@@ -186,23 +254,28 @@ export async function getLatestResult(
 
   const mine = isA ? match.helloAAt : match.helloBAt;
   const theirs = isA ? match.helloBAt : match.helloAAt;
+  const mutual = mine !== null && theirs !== null;
+  const passed = block !== null;
+  const own = snapshot(viewer);
   return {
-    status: 'matched',
-    roundId,
-    publishedAt,
-    match: {
-      matchId: match.id,
-      partner: {
-        displayName: partner.displayName,
-        age: ageOn(partner.birthDate, options.now ?? new Date()),
-        institution: partner.user.verifications[0]?.institution?.name ?? null,
-      },
-      reasons: explainMatch(snapshot(profile), snapshot(partner)),
-      saidHello: mine !== null,
-      mutual: mine !== null && theirs !== null,
-      passed: block !== null,
-      unread: await countUnread(prisma, match.id, partnerId, isA ? match.readAAt : match.readBAt),
+    matchId: match.id,
+    partner: {
+      displayName: partner.displayName,
+      age: ageOn(partner.birthDate, now),
+      institution: partner.user.verifications[0]?.institution?.name ?? null,
+      bio: card.bio,
+      prompts: card.prompts,
+      highlights: card.highlights,
+      // An ended match shows no photos at all, not even blurred ones.
+      photos: passed ? [] : card.photos,
     },
+    photosUnlocked: mutual && !passed,
+    reasons: explainMatch(own, { traits: card.traits, desires: {} }),
+    openers: suggestOpeners(card.prompts, own.traits, card.traits),
+    saidHello: mine !== null,
+    mutual,
+    passed,
+    unread: await countUnread(prisma, match.id, partnerId, isA ? match.readAAt : match.readBAt),
   };
 }
 

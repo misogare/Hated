@@ -89,9 +89,11 @@ export {
 export {
   explainMatch,
   getLatestResult,
+  getMatch,
   passMatch,
   sayHello,
   type MatchActionResult,
+  type MatchDetail,
   type MatchView,
   type RoundResultView,
   type TraitSnapshot,

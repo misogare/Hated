@@ -12,6 +12,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import type { PhotoView } from './photos.js';
 import { ageOn } from './profiles.js';
 import { findOwnMatch } from './results.js';
 import { countUnread } from './unread.js';
@@ -25,10 +26,18 @@ export interface MatchSummary {
   matchId: string;
   roundId: string;
   publishedAt: string;
-  partner: { displayName: string; age: number; institution: string | null };
+  partner: {
+    displayName: string;
+    age: number;
+    institution: string | null;
+    /** Their main photo; none once the match has ended. */
+    photo: PhotoView | null;
+  };
   saidHello: boolean;
   mutual: boolean;
   passed: boolean;
+  /** Both said hello and neither passed: the photo can be seen in full, not just blurred. */
+  photosUnlocked: boolean;
   lastMessage: { body: string; sentAt: string; mine: boolean } | null;
   /** Messages from the partner since this person last read the conversation. */
   unread: number;
@@ -47,6 +56,7 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
     id: true,
     displayName: true,
     birthDate: true,
+    photos: { orderBy: { position: 'asc' as const }, take: 1, select: { id: true, width: true, height: true } },
     user: {
       select: {
         verifications: {
@@ -83,6 +93,8 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
       const mine = isA ? match.helloAAt : match.helloBAt;
       const theirs = isA ? match.helloBAt : match.helloAAt;
       const last = match.messages[0];
+      const passed = blocked.has(partner.id);
+      const mutual = mine !== null && theirs !== null;
       return {
         matchId: match.id,
         roundId: match.roundId,
@@ -91,10 +103,12 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
           displayName: partner.displayName,
           age: ageOn(partner.birthDate, now),
           institution: partner.user.verifications[0]?.institution?.name ?? null,
+          photo: passed ? null : (partner.photos[0] ?? null),
         },
         saidHello: mine !== null,
-        mutual: mine !== null && theirs !== null,
-        passed: blocked.has(partner.id),
+        mutual,
+        passed,
+        photosUnlocked: mutual && !passed,
         lastMessage: last === undefined ? null : { body: last.body, sentAt: last.createdAt.toISOString(), mine: last.senderId === me },
         unread: await countUnread(prisma, match.id, partner.id, isA ? match.readAAt : match.readBAt),
       };
