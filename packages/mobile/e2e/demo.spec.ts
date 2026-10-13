@@ -90,7 +90,9 @@ test("a visitor's first weeks", async ({ page }) => {
     await expect(page.getByText('Not sure how to start?')).toBeVisible();
     await page.getByRole('button', { name: /perfect Sunday sounds good/ }).click();
     await button(page, 'Send').click();
+    await expect(page.getByLabel('Maya is typing')).toBeVisible();
     await expect(page.getByText('Glad you said hello.', { exact: false })).toBeVisible();
+    await expect(page.getByLabel('Maya is typing')).toHaveCount(0);
     await page.getByRole('textbox', { name: /^Message to Maya/ }).fill('Same here! The envelope was a nice touch.');
     await button(page, 'Send').click();
     await expect(page.getByText("what's the last book you couldn't put down?", { exact: false })).toBeVisible();

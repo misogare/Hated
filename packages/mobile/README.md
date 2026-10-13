@@ -76,6 +76,9 @@ with the same words for both people.
 
 Chat opens from home, the reveal or the matches list once both people have said
 hello; an empty conversation suggests three openers from what the two share.
+While the other person is writing, three dots say so (a live event, shown for a
+few seconds unless it's repeated); the app sends its own at most every 3 seconds
+while there's something in the box, and nothing about what's in it.
 
 **Live updates** come over a WebSocket (`src/live.tsx`): home, the matches list,
 the reveal and the chat refresh the moment something changes for this person.

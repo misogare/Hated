@@ -302,6 +302,9 @@ function reply(matchId: string): void {
   const line = person.replies[match.messages.filter((message) => !message.mine).length + pending];
   if (line === undefined) return;
   replying.set(matchId, pending + 1);
+  const delay = 1600 + Math.random() * 1400 + pending * 2200;
+  // They're seen typing for a moment before the message lands.
+  setTimeout(() => emit({ type: 'typing', matchId }), Math.max(0, delay - 1800));
   setTimeout(
     () => {
       replying.set(matchId, (replying.get(matchId) ?? 1) - 1);
@@ -311,7 +314,7 @@ function reply(matchId: string): void {
       save();
       emit({ type: 'message', matchId });
     },
-    1600 + Math.random() * 1400 + pending * 2200,
+    delay,
   );
 }
 
@@ -601,6 +604,10 @@ export function createDemoClient(options: ClientOptions): ApiClient {
       save();
       reply(match.id);
       return { message: { id: message.id, body: message.body, sentAt: message.sentAt, mine: true } };
+    },
+
+    async typing(matchId) {
+      await openConversation(matchId);
     },
 
     async matches() {

@@ -34,7 +34,7 @@ function isLiveEvent(value: unknown): value is LiveEvent {
   if (typeof value !== 'object' || value === null) return false;
   const event = value as Record<string, unknown>;
   if (event.type === 'round') return typeof event.roundId === 'string';
-  return (event.type === 'mutual' || event.type === 'message' || event.type === 'ended') && typeof event.matchId === 'string';
+  return (event.type === 'mutual' || event.type === 'message' || event.type === 'ended' || event.type === 'typing') && typeof event.matchId === 'string';
 }
 
 export function LiveProvider({ children }: { children: ReactNode }) {
