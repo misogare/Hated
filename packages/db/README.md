@@ -454,6 +454,17 @@ The account view carries all of this, and onboarding counts the profile as
 finished at two photos. The match view (`getLatestResult`, `getMatch`) carries
 the partner's, with `photosUnlocked`.
 
+## The window to say hello
+
+Once a round is published, the two people in each match have 24 hours
+(`HELLO_WINDOW_MS`) to both say hello; `helloWindowMs` in the options changes
+it (the API's `HELLO_WINDOW_HOURS`). The match views (`getLatestResult`,
+`getMatch`, `listMatches`) carry the `helloDeadline` and `expired`. After the
+deadline `sayHello` refuses with `expired` and a match that isn't mutual is
+over; one that became mutual in time stays open. Closing reads the same to both
+people, so whoever didn't say hello never learns whether the other did. The
+round's push says how long there is.
+
 ## Live events
 
 `createLiveNotifier` announces the moments the push notifier pushes (and a match

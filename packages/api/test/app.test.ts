@@ -771,3 +771,11 @@ describe('GET /matches/:id', () => {
     expect((await a.request('/matches/m2', { headers: bearer })).status).toBe(404);
   });
 });
+
+describe('the window to say hello', () => {
+  it('refuses a hello once the time is up', async () => {
+    const res = await app({ sayHello: async () => ({ ok: false, reason: 'expired' }) }).request('/matches/m1/hello', send('POST', undefined, bearer));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'expired' });
+  });
+});

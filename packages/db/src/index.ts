@@ -117,7 +117,7 @@ export {
   type PushTicket,
 } from './push-sender.js';
 
-export { createNotifier, silentNotifier, type Notifier } from './notify.js';
+export { createNotifier, describeWindow, silentNotifier, type Notifier } from './notify.js';
 
 export {
   LIVE_CHANNEL,
@@ -130,6 +130,8 @@ export {
 } from './live.js';
 
 export { deleteAccount } from './accounts.js';
+
+export { HELLO_WINDOW_MS, helloDeadline, helloExpired, type HelloWindowOptions } from './hello-window.js';
 
 export { createDiskPhotoStore, createMemoryPhotoStore, defaultPhotoDir, type PhotoStore } from './photo-store.js';
 

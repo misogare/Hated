@@ -12,10 +12,13 @@
  *
  * Before both have said hello, a match reads the other person's words, the
  * highlights from their answers and blurred photos; after, the photos unlock.
+ * There are 24 hours to say hello from when the round is published (see
+ * hello-window.ts); a match that isn't mutual by then closes.
  */
 
 import { suggestOpeners } from './descriptions.js';
 import type { PrismaClient } from './generated/prisma/client.js';
+import { HELLO_WINDOW_MS, helloDeadline, helloExpired, type HelloWindowOptions } from './hello-window.js';
 import type { PhotoView } from './photos.js';
 import { profileCard } from './profile-card.js';
 import type { PromptAnswer } from './profile-words.js';
@@ -42,6 +45,10 @@ export interface MatchView {
   reasons: string[];
   /** Ways to start the conversation, from the partner's prompts and what the two share. */
   openers: string[];
+  /** When the window to say hello closes. */
+  helloDeadline: string;
+  /** The window closed before both said hello: the match is over. */
+  expired: boolean;
   saidHello: boolean;
   /** Both have said hello. */
   mutual: boolean;
@@ -69,7 +76,7 @@ export type MatchActionResult =
       /** This call's hello is the one that made it mutual (for notifying once). */
       becameMutual?: boolean;
     }
-  | { ok: false; reason: 'not-found' | 'passed' };
+  | { ok: false; reason: 'not-found' | 'passed' | 'expired' };
 
 /** A trait's value or a desire, as the explanation needs them. */
 export interface TraitSnapshot {
@@ -151,7 +158,7 @@ export function explainMatch(viewer: TraitSnapshot, partner: TraitSnapshot): str
 export async function getLatestResult(
   prisma: PrismaClient,
   userId: string,
-  options: { now?: Date } = {},
+  options: HelloWindowOptions = {},
 ): Promise<RoundResultView> {
   const profile = await prisma.profile.findUnique({
     where: { userId },
@@ -177,7 +184,7 @@ export async function getLatestResult(
   // Show nothing rather than a "no match" that never happened.
   if (match === null) return { status: 'none' };
 
-  return { status: 'matched', roundId, publishedAt, match: await viewMatch(prisma, profile, match, options.now ?? new Date()) };
+  return { status: 'matched', roundId, publishedAt, match: await viewMatch(prisma, profile, { ...match, round: entry.round }, options) };
 }
 
 /** One of the person's matches from any published round, or null if it isn't theirs. */
@@ -185,7 +192,7 @@ export async function getMatch(
   prisma: PrismaClient,
   userId: string,
   matchId: string,
-  options: { now?: Date } = {},
+  options: HelloWindowOptions = {},
 ): Promise<MatchDetail | null> {
   const profile = await prisma.profile.findUnique({
     where: { userId },
@@ -201,7 +208,7 @@ export async function getMatch(
   return {
     roundId: match.roundId,
     publishedAt: (match.round.completedAt ?? match.round.startedAt).toISOString(),
-    match: await viewMatch(prisma, profile, match, options.now ?? new Date()),
+    match: await viewMatch(prisma, profile, match, options),
   };
 }
 
@@ -217,9 +224,11 @@ async function viewMatch(
     helloBAt: Date | null;
     readAAt: Date | null;
     readBAt: Date | null;
+    round: { startedAt: Date; completedAt: Date | null };
   },
-  now: Date,
+  options: HelloWindowOptions,
 ): Promise<MatchView> {
+  const now = options.now ?? new Date();
   const isA = match.profileAId === viewer.id;
   const partnerId = isA ? match.profileBId : match.profileAId;
   const [partner, card, block] = await Promise.all([
@@ -256,6 +265,7 @@ async function viewMatch(
   const theirs = isA ? match.helloBAt : match.helloAAt;
   const mutual = mine !== null && theirs !== null;
   const passed = block !== null;
+  const deadline = helloDeadline(match.round, options.helloWindowMs ?? HELLO_WINDOW_MS);
   const own = snapshot(viewer);
   return {
     matchId: match.id,
@@ -272,6 +282,8 @@ async function viewMatch(
     photosUnlocked: mutual && !passed,
     reasons: explainMatch(own, { traits: card.traits, desires: {} }),
     openers: suggestOpeners(card.prompts, own.traits, card.traits),
+    helloDeadline: deadline.toISOString(),
+    expired: helloExpired(deadline, mutual, now),
     saidHello: mine !== null,
     mutual,
     passed,
@@ -279,18 +291,21 @@ async function viewMatch(
   };
 }
 
-/** Record the person's hello on a match they are part of. Idempotent. */
+/** Record the person's hello on a match they are part of, while the window is open. Idempotent. */
 export async function sayHello(
   prisma: PrismaClient,
   userId: string,
   matchId: string,
-  options: { now?: Date } = {},
+  options: HelloWindowOptions = {},
 ): Promise<MatchActionResult> {
   const found = await findOwnMatch(prisma, userId, matchId);
   if (found === null) return { ok: false, reason: 'not-found' };
   if (found.passed) return { ok: false, reason: 'passed' };
 
   const now = options.now ?? new Date();
+  if (helloExpired(helloDeadline(found.round, options.helloWindowMs ?? HELLO_WINDOW_MS), found.mutual, now)) {
+    return { ok: false, reason: 'expired' };
+  }
   // Only the first hello counts: the null guard keeps the original time.
   const { count } = found.isA
     ? await prisma.match.updateMany({ where: { id: matchId, helloAAt: null }, data: { helloAAt: now } })
@@ -327,7 +342,13 @@ export async function findOwnMatch(prisma: PrismaClient, userId: string, matchId
       round: { status: 'PUBLISHED' },
       OR: [{ profileAId: profile.id }, { profileBId: profile.id }],
     },
-    select: { profileAId: true, profileBId: true, helloAAt: true, helloBAt: true },
+    select: {
+      profileAId: true,
+      profileBId: true,
+      helloAAt: true,
+      helloBAt: true,
+      round: { select: { startedAt: true, completedAt: true } },
+    },
   });
   if (match === null) return null;
 
@@ -348,6 +369,7 @@ export async function findOwnMatch(prisma: PrismaClient, userId: string, matchId
     isA,
     passed: block !== null,
     mutual: match.helloAAt !== null && match.helloBAt !== null,
+    round: match.round,
   };
 }
 

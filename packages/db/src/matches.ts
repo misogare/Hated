@@ -12,6 +12,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import { HELLO_WINDOW_MS, helloDeadline, helloExpired, type HelloWindowOptions } from './hello-window.js';
 import type { PhotoView } from './photos.js';
 import { ageOn } from './profiles.js';
 import { findOwnMatch } from './results.js';
@@ -38,6 +39,10 @@ export interface MatchSummary {
   passed: boolean;
   /** Both said hello and neither passed: the photo can be seen in full, not just blurred. */
   photosUnlocked: boolean;
+  /** When the window to say hello closes. */
+  helloDeadline: string;
+  /** The window closed before both said hello: the match is over. */
+  expired: boolean;
   lastMessage: { body: string; sentAt: string; mine: boolean } | null;
   /** Messages from the partner since this person last read the conversation. */
   unread: number;
@@ -46,7 +51,7 @@ export interface MatchSummary {
 export type ReportResult = { ok: true } | { ok: false; reason: 'not-found' } | { ok: false; reason: 'invalid'; problem: string };
 
 /** All of this person's matches from published rounds, newest round first. */
-export async function listMatches(prisma: PrismaClient, userId: string, options: { now?: Date } = {}): Promise<MatchSummary[]> {
+export async function listMatches(prisma: PrismaClient, userId: string, options: HelloWindowOptions = {}): Promise<MatchSummary[]> {
   const profile = await prisma.profile.findUnique({ where: { userId }, select: { id: true } });
   if (profile === null) return [];
   const me = profile.id;
@@ -95,6 +100,7 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
       const last = match.messages[0];
       const passed = blocked.has(partner.id);
       const mutual = mine !== null && theirs !== null;
+      const deadline = helloDeadline(match.round, options.helloWindowMs ?? HELLO_WINDOW_MS);
       return {
         matchId: match.id,
         roundId: match.roundId,
@@ -109,6 +115,8 @@ export async function listMatches(prisma: PrismaClient, userId: string, options:
         mutual,
         passed,
         photosUnlocked: mutual && !passed,
+        helloDeadline: deadline.toISOString(),
+        expired: helloExpired(deadline, mutual, now),
         lastMessage: last === undefined ? null : { body: last.body, sentAt: last.createdAt.toISOString(), mine: last.senderId === me },
         unread: await countUnread(prisma, match.id, partner.id, isA ? match.readAAt : match.readBAt),
       };

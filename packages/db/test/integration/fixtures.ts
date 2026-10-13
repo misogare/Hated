@@ -2,6 +2,7 @@
 
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { saveProfile } from '../../src/profiles.js';
+import { sayHello } from '../../src/results.js';
 
 export const NOW = new Date('2026-10-05T12:00:00Z');
 
@@ -38,15 +39,19 @@ export async function member(
   return { userId: user.id, profileId: saved.profileId };
 }
 
-/** A two-person round that matched `a` with `b`. */
+/**
+ * A two-person round that matched `a` with `b`, published now (so the window
+ * to say hello is open) unless told when.
+ */
 export async function roundMatching(
   prisma: PrismaClient,
   a: string,
   b: string,
   status: 'PUBLISHED' | 'COMPUTED' = 'PUBLISHED',
+  publishedAt: Date = new Date(),
 ) {
   const round = await prisma.matchRound.create({
-    data: { status, objective: 'min-regret', config: {}, population: 2, matched: 2, matchRate: 1, stable: true, completedAt: NOW },
+    data: { status, objective: 'min-regret', config: {}, population: 2, matched: 2, matchRate: 1, stable: true, startedAt: publishedAt, completedAt: publishedAt },
   });
   await prisma.matchRoundParticipant.createMany({
     data: [
@@ -55,4 +60,10 @@ export async function roundMatching(
     ],
   });
   return prisma.match.create({ data: { roundId: round.id, profileAId: a, profileBId: b } });
+}
+
+/** Say hello a minute after the match's round was published, well inside the window, however old the round. */
+export async function helloInTime(prisma: PrismaClient, userId: string, matchId: string) {
+  const { round } = await prisma.match.findUniqueOrThrow({ where: { id: matchId }, select: { round: { select: { startedAt: true, completedAt: true } } } });
+  return sayHello(prisma, userId, matchId, { now: new Date((round.completedAt ?? round.startedAt).getTime() + 60_000) });
 }

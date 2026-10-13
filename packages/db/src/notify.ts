@@ -15,6 +15,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import { HELLO_WINDOW_MS } from './hello-window.js';
 import type { NotificationKind } from './notification-prefs.js';
 import type { PushMessage, PushSender } from './push-sender.js';
 import { pushTokensFor, removePushTokens } from './push-tokens.js';
@@ -41,9 +42,14 @@ export const silentNotifier: Notifier = {
 export function createNotifier(
   prisma: PrismaClient,
   sender: PushSender,
-  options: { log?: (line: string) => void } = {},
+  options: {
+    log?: (line: string) => void;
+    /** How long people have to say hello, for the round's message. Default 24 hours. */
+    helloWindowMs?: number;
+  } = {},
 ): Notifier {
   const log = options.log ?? ((line: string) => console.error(line));
+  const window = describeWindow(options.helloWindowMs ?? HELLO_WINDOW_MS);
 
   /** Send one notification to every device of each person who wants this kind; never throws. */
   async function deliver(
@@ -121,10 +127,18 @@ export function createNotifier(
         'rounds',
         participants.map((participant) =>
           participant.matched
-            ? { userId: participant.profile.userId, title: 'Your match is here', body: "This round's match is ready when you are.", data: { type: 'round' } }
+            ? { userId: participant.profile.userId, title: 'Your match is here', body: `You have ${window} to say hello.`, data: { type: 'round' } }
             : { userId: participant.profile.userId, title: "This round's results are in", body: 'Open HateD to see how it went.', data: { type: 'round' } },
         ),
       );
     },
   };
+}
+
+/** "24 hours", "1 hour", "30 minutes": the hello window in words. */
+export function describeWindow(ms: number): string {
+  const hours = ms / 3_600_000;
+  if (hours >= 1 && Number.isInteger(hours)) return hours === 1 ? '1 hour' : `${hours} hours`;
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
 }

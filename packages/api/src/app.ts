@@ -577,8 +577,8 @@ function saved(c: Context, result: SaveResult): Response {
     : c.json<Api.ApiError>({ error: 'invalid', problems: result.problems }, 422);
 }
 
-function matchActionError(c: Context, reason: 'not-found' | 'passed'): Response {
-  return reason === 'not-found'
-    ? c.json<Api.ApiError>({ error: 'not-found' }, 404)
-    : c.json<Api.ApiError>({ error: 'passed' }, 409);
+/** Not on the match: 404; ended by a pass: 409; the time to say hello is up: 409 `expired`. */
+function matchActionError(c: Context, reason: 'not-found' | 'passed' | 'expired'): Response {
+  if (reason === 'not-found') return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+  return c.json<Api.ApiError>({ error: reason }, 409);
 }

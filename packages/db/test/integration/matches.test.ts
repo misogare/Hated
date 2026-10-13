@@ -3,10 +3,10 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { listMessages, sendMessage } from '../../src/chat.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { listMatches, reportMatch } from '../../src/matches.js';
-import { getLatestResult, sayHello } from '../../src/results.js';
+import { getLatestResult } from '../../src/results.js';
 import { seedDatabase } from '../../src/seed.js';
 import { createTestClient, hasTestDatabase, resetDatabase } from './database.js';
-import { member } from './fixtures.js';
+import { helloInTime, member } from './fixtures.js';
 
 describe.skipIf(!hasTestDatabase)('match history, unread and reports (Postgres)', () => {
   let prisma: PrismaClient;
@@ -36,7 +36,7 @@ describe.skipIf(!hasTestDatabase)('match history, unread and reports (Postgres)'
   }
 
   async function mutual(matchId: string, ...userIds: string[]) {
-    for (const userId of userIds) await sayHello(prisma, userId, matchId);
+    for (const userId of userIds) await helloInTime(prisma, userId, matchId);
   }
 
   it('lists every match from published rounds, newest first, so earlier chats stay reachable', async () => {

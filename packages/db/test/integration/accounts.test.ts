@@ -9,11 +9,11 @@ import { createMemoryPhotoStore } from '../../src/photo-store.js';
 import { addPhoto } from '../../src/photos.js';
 import { registerPushToken } from '../../src/push-tokens.js';
 import { listReports } from '../../src/reports.js';
-import { getLatestResult, sayHello } from '../../src/results.js';
+import { getLatestResult } from '../../src/results.js';
 import { seedDatabase } from '../../src/seed.js';
 import { createSession, resolveSession } from '../../src/sessions.js';
 import { createTestClient, hasTestDatabase, resetDatabase } from './database.js';
-import { member } from './fixtures.js';
+import { helloInTime, member } from './fixtures.js';
 
 describe.skipIf(!hasTestDatabase)('deleting an account (Postgres)', () => {
   let prisma: PrismaClient;
@@ -66,8 +66,8 @@ describe.skipIf(!hasTestDatabase)('deleting an account (Postgres)', () => {
     await reportMatch(prisma, zara.userId, withZara.id, { reason: 'harassment' });
 
     const withMaya = await round(sam.profileId, maya.profileId, '2026-10-04T09:00:00Z');
-    await sayHello(prisma, sam.userId, withMaya.id);
-    await sayHello(prisma, maya.userId, withMaya.id);
+    await helloInTime(prisma, sam.userId, withMaya.id);
+    await helloInTime(prisma, maya.userId, withMaya.id);
     await sendMessage(prisma, sam.userId, withMaya.id, 'Hi Maya!');
     await sendMessage(prisma, maya.userId, withMaya.id, 'Hi Sam!');
 
