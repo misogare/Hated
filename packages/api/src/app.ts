@@ -479,8 +479,13 @@ export function createApp(options: ApiOptions): Hono<Env> {
     const body = await readBody(c, ReportBody);
     if (!body.ok) return body.response;
 
-    const result = await services.reportMatch(c.get('userId'), c.req.param('matchId'), body.value);
-    if (result.ok) return c.body(null, 204);
+    const userId = c.get('userId');
+    const matchId = c.req.param('matchId');
+    const result = await services.reportMatch(userId, matchId, body.value);
+    if (result.ok) {
+      void notifier.matchEnded(matchId, userId);
+      return c.body(null, 204);
+    }
     return result.reason === 'not-found'
       ? c.json<Api.ApiError>({ error: 'not-found' }, 404)
       : c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
@@ -497,8 +502,11 @@ export function createApp(options: ApiOptions): Hono<Env> {
   });
 
   app.post('/matches/:matchId/pass', requireUser, async (c) => {
-    const result = await services.passMatch(c.get('userId'), c.req.param('matchId'));
+    const userId = c.get('userId');
+    const matchId = c.req.param('matchId');
+    const result = await services.passMatch(userId, matchId);
     if (!result.ok) return matchActionError(c, result.reason);
+    void notifier.matchEnded(matchId, userId);
     return c.body(null, 204);
   });
 

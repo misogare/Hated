@@ -62,10 +62,32 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `POST /matches/:id/hello` | Say hello; `{ mutual }` once both have | 404 `not-found`, 409 `passed` |
 | `POST /matches/:id/pass` | Never be matched with them again | 404 `not-found` |
 | `GET /matches/:id/messages?after=<id>` | The conversation, oldest first; with `after`, only newer messages (the app polls this) | 403 `not-mutual` until both said hello, 409 `passed`, 404 `not-found` |
+| `GET /live` (WebSocket) | Live updates while the app is open; see below | closes with 4001 if the session is refused |
 | `POST /matches/:id/messages` `{ body }` | Send a message (trimmed, 1–2000 characters) | 201 with the message; 422 `invalid`; 403 / 409 / 404 as above |
 
 Errors are always `{ error, problems?, attemptsRemaining?, retryAfterSeconds? }`;
 internal errors are logged and returned as a bare `{ error: "internal" }`.
+
+## Live updates
+
+The app keeps a WebSocket open at `/live` while signed in. Its first message
+signs in, `{ "type": "auth", "token": "…" }` (browsers can't put headers on a
+WebSocket, and a token in the URL would end up in logs); the answer is
+`{ "type": "ready" }`. From then on it receives one small event the moment
+something changes for that person:
+
+| Event | Sent to | When |
+| --- | --- | --- |
+| `{ type: "mutual", matchId }` | both people | the second hello, so the chat opens on both screens |
+| `{ type: "message", matchId }` | both people | a new message (never its text) |
+| `{ type: "ended", matchId }` | both people | a pass or a report |
+| `{ type: "round", roundId }` | everyone in it | a round is published, by the scheduler or the CLI |
+
+A one-sided hello is never announced, as everywhere else. Events go through
+Postgres (`NOTIFY`/`LISTEN` on `hated_live`), so every API server hears every
+event, and a round published from the CLI reaches open apps too. Each
+connection is pinged every 30 seconds and its session checked again, so dead
+connections go and signing out closes the socket.
 
 ## Automatic rounds
 

@@ -12,19 +12,27 @@
  * per-IP sign-in limits read X-Forwarded-For; EXPO_ACCESS_TOKEN if the Expo
  * project requires one for sending push notifications; and PHOTO_DIR for where
  * photos are kept (packages/db/data/photos).
+ *
+ * Apps also keep a WebSocket open at /live for live updates (see
+ * live-server.ts); the events reach it through Postgres, from this server, any
+ * other one, or the round CLI.
  */
 
+import type { Server } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  combineNotifiers,
   createDiskPhotoStore,
   createExpoPushSender,
+  createLiveNotifier,
   createMailer,
   createNotifier,
   createPrismaClient,
   defaultPhotoDir,
   describeMailConfig,
+  listenLive,
   resolveMailConfig,
   runScheduledRound,
 } from '@hated/db';
@@ -33,6 +41,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { config } from 'dotenv';
 
 import { createApp } from './app.js';
+import { attachLiveServer } from './live-server.js';
 import { startRoundScheduler } from './round-scheduler.js';
 import { nextRoundAt, parseSchedule } from './schedule.js';
 import { createDbServices } from './services.js';
@@ -61,17 +70,24 @@ try {
 /** Behind a proxy every request comes from the proxy, so read the forwarded address. */
 const trustProxy = (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true';
 
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) fail('DATABASE_URL is not set (packages/db/.env).');
+
 const prisma = createPrismaClient();
 const photoDir = process.env.PHOTO_DIR?.trim() || defaultPhotoDir();
 const photos = createDiskPhotoStore(photoDir);
-const notifier = createNotifier(
-  prisma,
-  createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined }),
-  { log: (line) => console.error(`[push] ${line}`) },
+// Every moment goes out twice: as a push (to phones in a pocket) and as a live
+// event (to apps that are open).
+const notifier = combineNotifiers(
+  createNotifier(prisma, createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined }), {
+    log: (line) => console.error(`[push] ${line}`),
+  }),
+  createLiveNotifier(prisma, { log: (line) => console.error(`[live] ${line}`) }),
 );
+const services = createDbServices(prisma, createMailer(mailConfig), photos);
 const app = createApp({
   notifier,
-  services: createDbServices(prisma, createMailer(mailConfig), photos),
+  services,
   clientIp: (c) => {
     if (trustProxy) {
       const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
@@ -97,7 +113,7 @@ const scheduler = autorun
 
 const port = Number(process.env.PORT ?? 3000);
 const hostname = process.env.HOST ?? '0.0.0.0';
-serve({ fetch: app.fetch, port, hostname }, (info) => {
+const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`HateD API on http://${hostname}:${info.port}`);
   console.log(`  mail     ${describeMailConfig(mailConfig)}`);
   console.log(`  photos   ${photoDir}`);
@@ -108,8 +124,18 @@ serve({ fetch: app.fetch, port, hostname }, (info) => {
   if (mailConfig.kind === 'console') console.log('  sign-in codes are printed here, not emailed');
 });
 
+const live = attachLiveServer(server as Server, {
+  resolveSession: (token) => services.resolveSession(token),
+  log: (line) => console.error(`[live] ${line}`),
+});
+const listener = listenLive(databaseUrl, (userIds, event) => live.deliver(userIds, event), {
+  log: (line) => console.error(`[live] ${line}`),
+});
+
 const shutdown = async () => {
   scheduler?.stop();
+  await listener.stop();
+  await live.close();
   await prisma.$disconnect();
   process.exit(0);
 };

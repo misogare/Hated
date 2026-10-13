@@ -455,6 +455,9 @@ describe('push notifications', () => {
       becameMutual: async (matchId, userId) => {
         calls.push(`mutual ${matchId} by ${userId}`);
       },
+      matchEnded: async (matchId, userId) => {
+        calls.push(`ended ${matchId} by ${userId}`);
+      },
       roundPublished: async (roundId) => {
         calls.push(`round ${roundId}`);
       },
@@ -522,6 +525,15 @@ describe('push notifications', () => {
     for (let i = 0; i < 3; i++) await a.request('/matches/m1/hello', send('POST', undefined, bearer));
 
     expect(calls).toEqual(['mutual m1 by user-1']);
+  });
+
+  it('announces an ended match when someone passes or reports, and not when that was refused', async () => {
+    const { calls, notifier } = recordingNotifier();
+    await appWith(notifier, { passMatch: async () => ({ ok: true, mutual: false }) }).request('/matches/m1/pass', send('POST', undefined, bearer));
+    await appWith(notifier, { reportMatch: async () => ({ ok: true }) }).request('/matches/m2/report', send('POST', { reason: 'spam' }, bearer));
+    await appWith(notifier, { passMatch: async () => ({ ok: false, reason: 'not-found' }) }).request('/matches/m3/pass', send('POST', undefined, bearer));
+
+    expect(calls).toEqual(['ended m1 by user-1', 'ended m2 by user-1']);
   });
 
   it('sends nothing when the message was refused', async () => {

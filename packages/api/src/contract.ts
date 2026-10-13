@@ -320,3 +320,16 @@ export interface SendMessageRequest {
 export interface SendMessageResponse {
   message: ChatMessage;
 }
+
+// --- Live updates ------------------------------------------------------------
+
+/**
+ * What arrives over the WebSocket at `/live` once signed in (send
+ * `{ type: 'auth', token }` first; the answer is `{ type: 'ready' }`). Each
+ * says only what changed for this person, so the app can fetch it.
+ */
+export type LiveEvent =
+  | { type: 'mutual'; matchId: string }
+  | { type: 'message'; matchId: string }
+  | { type: 'ended'; matchId: string }
+  | { type: 'round'; roundId: string };
