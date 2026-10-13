@@ -68,6 +68,11 @@ circles meet, the photos unblur, and the chat opens by itself, for whichever of
 the two said hello first as well as the one who completed it. `?matchId=` opens
 any earlier match the same way.
 
+Both have 24 hours from the round to say hello (the API's `HELLO_WINDOW_HOURS`).
+The reveal, home and "Your matches" show the time left; when it runs out, a
+match that isn't mutual closes on every screen, a reveal left open included,
+with the same words for both people.
+
 Chat opens from home, the reveal or the matches list once both people have said
 hello; an empty conversation suggests three openers from what the two share.
 

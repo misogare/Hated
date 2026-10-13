@@ -2,9 +2,9 @@ import type { Match } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { describeError } from '@/api/client';
+import { ApiError, describeError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { BackButton, Notice } from '@/components/Controls';
 import { Envelope } from '@/components/Envelope';
@@ -17,6 +17,7 @@ import { useLive, useLiveConnected } from '@/live';
 import { NATIVE_DRIVER } from '@/motion';
 import { useSession } from '@/session';
 import { fonts, night, shadows } from '@/theme';
+import { timeLeft, useNow } from '@/time';
 
 /**
  * - sealed / opening: the envelope, before and while it opens.
@@ -25,8 +26,12 @@ import { fonts, night, shadows } from '@/theme';
  * - meeting: it just became mutual; the circles meet, then the chat opens.
  * - together: it was already mutual when this screen opened.
  * - passed: the match has ended.
+ * - expired: the time to say hello ran out before both had.
  */
-type Step = 'sealed' | 'opening' | 'deciding' | 'confirming-pass' | 'waiting' | 'meeting' | 'together' | 'passed';
+type Step = 'sealed' | 'opening' | 'deciding' | 'confirming-pass' | 'waiting' | 'meeting' | 'together' | 'passed' | 'expired';
+
+/** The steps in which the window to say hello is still being waited on. */
+const OPEN_STEPS: readonly Step[] = ['sealed', 'opening', 'deciding', 'confirming-pass', 'waiting'];
 
 /** How often to look for the other person's hello while waiting here, without and with the live connection. */
 const WATCH_MS = 4000;
@@ -37,6 +42,7 @@ const MEETING_MS = 2600;
 function stepFor(match: Match): Step {
   if (match.passed) return 'passed';
   if (match.mutual) return 'together';
+  if (match.expired) return 'expired';
   if (match.saidHello) return 'waiting';
   return 'sealed';
 }
@@ -51,6 +57,7 @@ export default function Reveal() {
   const { matchId: wanted, moment } = useLocalSearchParams<{ matchId?: string; moment?: string }>();
   const { api } = useSession();
   const live = useLiveConnected();
+  const now = useNow(15_000);
   const [match, setMatch] = useState<Match | null | undefined>(undefined);
   const [step, setStep] = useState<Step>('sealed');
   const [busy, setBusy] = useState(false);
@@ -85,6 +92,7 @@ export default function Reveal() {
       (fresh) => {
         if (fresh?.passed) setStep('passed');
         else if (fresh?.mutual) setStep((current) => (current === 'deciding' || current === 'confirming-pass' || current === 'waiting' ? 'meeting' : current));
+        else if (fresh?.expired) setStep((current) => (OPEN_STEPS.includes(current) ? 'expired' : current));
       },
       () => undefined,
     );
@@ -94,6 +102,16 @@ export default function Reveal() {
   useLive((event) => {
     if ((event.type === 'mutual' || event.type === 'ended') && event.matchId === matchId) check();
   });
+
+  // When the time runs out while this screen is open, check with the server
+  // (a hello may have just made it) and close the match if it didn't.
+  const deadline = match?.helloDeadline;
+  const waitingOnWindow = deadline !== undefined && match?.mutual === false && OPEN_STEPS.includes(step);
+  useEffect(() => {
+    if (!waitingOnWindow || deadline === undefined) return;
+    const timer = setTimeout(check, Math.max(0, Date.parse(deadline) - Date.now() + 1000));
+    return () => clearTimeout(timer);
+  }, [waitingOnWindow, deadline, check]);
 
   // While waiting, also look now and then, in case the live connection is down.
   useFocusEffect(
@@ -126,7 +144,12 @@ export default function Reveal() {
         setStep('waiting');
       }
     } catch (caught) {
-      setError(describeError(caught));
+      if (caught instanceof ApiError && caught.code === 'expired') {
+        setStep('expired');
+        await reload().catch(() => null);
+      } else {
+        setError(describeError(caught));
+      }
     } finally {
       setBusy(false);
     }
@@ -162,6 +185,7 @@ export default function Reveal() {
         </Text>
         <View style={styles.envelope}>
           <Envelope opening={step === 'opening'} onOpened={() => setStep('deciding')} />
+          <Deadline left={timeLeft(match.helloDeadline, now)} style={styles.sealedDeadline} />
         </View>
       </Screen>
     );
@@ -275,6 +299,7 @@ export default function Reveal() {
       case 'deciding':
         return (
           <>
+            <Deadline left={timeLeft(match.helloDeadline, now)} />
             <Button label="Say hello" tone="night" onPress={() => void sayHello()} busy={busy} style={styles.honey} />
             <View style={styles.secondary}>
               <Button label="Not for me" tone="night" variant="secondary" onPress={() => setStep('confirming-pass')} disabled={busy} style={styles.half} />
@@ -300,7 +325,7 @@ export default function Reveal() {
           </View>
         );
       case 'waiting':
-        return <Waiting name={name} />;
+        return <Waiting name={name} left={timeLeft(match.helloDeadline, now)} />;
       case 'meeting':
         return <Meeting name={name} onDone={() => router.replace({ pathname: '/chat', params: { matchId: match.matchId } })} />;
       case 'together':
@@ -310,6 +335,18 @@ export default function Reveal() {
               You both said hello.
             </Body>
             <Button label="Open chat" tone="night" onPress={() => router.push({ pathname: '/chat', params: { matchId: match.matchId } })} style={styles.honey} />
+          </>
+        );
+      case 'expired':
+        return (
+          <>
+            <View style={[styles.card, styles.closedCard]} accessibilityLiveRegion="polite">
+              <Text style={styles.cardTitle}>The time to say hello is up</Text>
+              <Body tone="night" style={styles.cardBody}>
+                This match closed before you both said hello. You're still in for the next round.
+              </Body>
+            </View>
+            <Button label="Back to home" tone="night" onPress={() => router.replace('/home')} />
           </>
         );
       case 'passed':
@@ -326,8 +363,18 @@ export default function Reveal() {
   }
 }
 
+/** How long is left to say hello, small and in honey. */
+function Deadline({ left, style }: { left: string; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={[styles.deadline, style]}>
+      <Feather name="clock" size={14} color={night.honey} />
+      <Text style={styles.deadlineText}>{left} left to say hello</Text>
+    </View>
+  );
+}
+
 /** Hello sent: a soft pulse while the screen watches for theirs. */
-function Waiting({ name }: { name: string }) {
+function Waiting({ name, left }: { name: string; left: string }) {
   const [pulse] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const loop = Animated.loop(
@@ -353,7 +400,9 @@ function Waiting({ name }: { name: string }) {
             { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }), transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] }) }] },
           ]}
         />
-        <Text style={styles.waitingText}>Waiting for {name}</Text>
+        <Text style={styles.waitingText}>
+          Waiting for {name} · {left} left
+        </Text>
       </View>
     </View>
   );
@@ -448,5 +497,9 @@ const styles = StyleSheet.create({
   openNowText: { fontFamily: fonts.bodySemi, fontSize: 15, color: night.honey, textDecorationLine: 'underline' },
   pressed: { opacity: 0.7 },
   togetherText: { textAlign: 'center', fontSize: 15 },
+  deadline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  deadlineText: { fontFamily: fonts.bodySemi, fontSize: 13.5, color: night.honey },
+  sealedDeadline: { marginTop: 18 },
+  closedCard: { gap: 6 },
   passed: { textAlign: 'center', fontSize: 15 },
 });

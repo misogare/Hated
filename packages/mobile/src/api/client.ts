@@ -190,6 +190,8 @@ export function describeError(error: unknown): string {
       return 'The conversation opens once you have both said hello.';
     case 'passed':
       return 'This conversation has ended.';
+    case 'expired':
+      return 'The time to say hello is up.';
     case 'too-many':
     case 'too-large':
       return error.body?.problems?.join(' ') ?? 'That photo could not be added.';

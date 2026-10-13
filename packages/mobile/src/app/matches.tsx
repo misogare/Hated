@@ -12,6 +12,7 @@ import { Body, Eyebrow, Title } from '@/components/Text';
 import { useLive } from '@/live';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
+import { timeLeft, useNow } from '@/time';
 
 /** Every match so far, newest first: open a conversation, or see where things stand. */
 export default function Matches() {
@@ -81,6 +82,7 @@ export default function Matches() {
 }
 
 function Row({ match, latest }: { match: MatchSummary; latest: boolean }) {
+  const now = useNow(30_000);
   const open = match.mutual && !match.passed;
   // This round's match can be opened to say hello; an earlier one only if a hello is already in.
   const target = open ? 'chat' : !match.passed && (latest || match.saidHello) ? 'reveal' : null;
@@ -90,19 +92,19 @@ function Row({ match, latest }: { match: MatchSummary; latest: boolean }) {
 
   const content = (
     <>
-      <View style={match.passed && styles.dimmed}>
+      <View style={(match.passed || match.expired) && styles.dimmed}>
         <Avatar name={match.partner.displayName} photo={match.partner.photo} unlocked={match.photosUnlocked} size={56} />
       </View>
       <View style={styles.rowText}>
         <View style={styles.rowTop}>
-          <Text style={[styles.name, match.passed && styles.mutedText]} numberOfLines={1}>
+          <Text style={[styles.name, (match.passed || match.expired) && styles.mutedText]} numberOfLines={1}>
             {match.partner.displayName}
           </Text>
           <Text style={styles.date}>{latest && lastAt !== null ? lastAt : date}</Text>
         </View>
         <View style={styles.rowBottom}>
           <Text style={[styles.preview, match.unread > 0 && styles.previewUnread]} numberOfLines={1}>
-            {status(match, latest)}
+            {status(match, latest, now)}
           </Text>
           <UnreadBadge count={match.unread} />
         </View>
@@ -110,10 +112,10 @@ function Row({ match, latest }: { match: MatchSummary; latest: boolean }) {
     </>
   );
 
-  const rowStyle = [styles.row, highlighted && styles.rowLive, match.passed && styles.rowEnded];
+  const rowStyle = [styles.row, highlighted && styles.rowLive, (match.passed || match.expired) && styles.rowEnded];
   if (target === null) {
     return (
-      <View style={rowStyle} accessible accessibilityLabel={`${match.partner.displayName}: ${status(match, latest)}`}>
+      <View style={rowStyle} accessible accessibilityLabel={`${match.partner.displayName}: ${status(match, latest, now)}`}>
         {content}
       </View>
     );
@@ -121,7 +123,7 @@ function Row({ match, latest }: { match: MatchSummary; latest: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${match.partner.displayName}: ${status(match, latest)}`}
+      accessibilityLabel={`${match.partner.displayName}: ${status(match, latest, now)}`}
       onPress={() =>
         target === 'chat'
           ? router.push({ pathname: '/chat', params: { matchId: match.matchId } })
@@ -134,12 +136,14 @@ function Row({ match, latest }: { match: MatchSummary; latest: boolean }) {
   );
 }
 
-function status(match: MatchSummary, latest: boolean): string {
+function status(match: MatchSummary, latest: boolean, now: number): string {
   if (match.passed) return 'This conversation has ended';
   if (match.lastMessage !== null) return `${match.lastMessage.mine ? 'You: ' : ''}${match.lastMessage.body}`;
   if (match.mutual) return 'You both said hello. Start the conversation';
-  if (match.saidHello) return `You said hello · waiting for ${match.partner.displayName}`;
-  return latest ? 'Open it when you’re ready' : 'No hello this round';
+  if (match.expired) return 'Closed: the time to say hello ran out';
+  const left = timeLeft(match.helloDeadline, now);
+  if (match.saidHello) return `You said hello · ${left} left`;
+  return latest ? `${left} left to say hello` : 'No hello this round';
 }
 
 const styles = StyleSheet.create({

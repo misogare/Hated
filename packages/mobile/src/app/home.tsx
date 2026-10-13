@@ -16,6 +16,7 @@ import { useLive } from '@/live';
 import { registerForPush, useNotificationRouting } from '@/notifications';
 import { useSession } from '@/session';
 import { fonts, night, shadows } from '@/theme';
+import { timeLeft, useNow } from '@/time';
 
 /** Rounds are weekly: the candle is full a week before the round closes. */
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -177,6 +178,7 @@ function Countdown({ nextRoundAt }: { nextRoundAt: string }) {
 
 /** The latest published round, when there is one to act on. */
 function Result({ home }: { home: HomeData }) {
+  const now = useNow(30_000);
   const result = home.result;
   if (result.status === 'none') return null;
   if (result.status === 'unmatched') {
@@ -198,7 +200,7 @@ function Result({ home }: { home: HomeData }) {
 
   const { match } = result;
   if (match.passed) return null;
-  const opened = match.saidHello || match.mutual;
+  const opened = match.saidHello || match.mutual || match.expired;
   const photo = match.partner.photos[0];
   return (
     <>
@@ -207,9 +209,9 @@ function Result({ home }: { home: HomeData }) {
       </Eyebrow>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel={`${opened ? match.partner.displayName : 'Your match'}: ${status(match)}`}
+        accessibilityLabel={`${opened ? match.partner.displayName : 'Your match'}: ${status(match, now)}`}
         onPress={() => (match.mutual ? router.push({ pathname: '/chat', params: { matchId: match.matchId } }) : router.push('/reveal'))}
-        style={({ pressed }) => [styles.result, styles.resultLive, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.result, !match.expired && styles.resultLive, pressed && styles.pressed]}
       >
         {opened && photo !== undefined ? (
           <View style={styles.thumb}>
@@ -227,7 +229,7 @@ function Result({ home }: { home: HomeData }) {
         )}
         <View style={styles.resultText}>
           <Text style={styles.resultName}>{opened ? `${match.partner.displayName}, ${match.partner.age}` : 'Your match is here'}</Text>
-          <Text style={styles.resultStatus}>{status(match)}</Text>
+          <Text style={styles.resultStatus}>{status(match, now)}</Text>
         </View>
         <UnreadBadge count={match.unread} />
         <Feather name="chevron-right" size={20} color={night.muted} />
@@ -236,10 +238,12 @@ function Result({ home }: { home: HomeData }) {
   );
 }
 
-function status(match: Match): string {
+function status(match: Match, now: number): string {
   if (match.mutual) return match.unread > 0 ? 'New messages' : 'You both said hello';
-  if (match.saidHello) return `Waiting for ${match.partner.displayName}`;
-  return 'Open it when you’re ready';
+  if (match.expired) return 'The time to say hello is up';
+  const left = timeLeft(match.helloDeadline, now);
+  if (match.saidHello) return `Waiting for ${match.partner.displayName} · ${left} left`;
+  return `${left} left to say hello`;
 }
 
 const styles = StyleSheet.create({
