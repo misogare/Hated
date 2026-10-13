@@ -94,6 +94,8 @@ export interface NotificationPrefs {
   hellos: boolean;
   /** A round's result is in. */
   rounds: boolean;
+  /** The time to say hello is nearly up, and they haven't said it yet. */
+  reminders: boolean;
 }
 
 /** Kinds left out stay as they are. */

@@ -36,8 +36,10 @@ import {
   describeMailConfig,
   describeWindow,
   listenLive,
+  reminderLeadMs,
   resolveMailConfig,
   runScheduledRound,
+  sendHelloReminders,
 } from '@hated/db';
 import { serve } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -119,6 +121,23 @@ const scheduler = autorun
     })
   : null;
 
+// Shortly before a round's window to say hello closes, remind whoever hasn't
+// said hello yet. Each reminder is claimed in the database first, so every
+// server can run this, as often as it likes, and nobody hears twice.
+const reminderLead = reminderLeadMs(helloWindowMs);
+const reminders = setInterval(
+  () => {
+    sendHelloReminders(prisma, notifier, { helloWindowMs }).then(
+      (sent) => {
+        if (sent > 0) console.log(`[reminders] reminded ${sent} ${sent === 1 ? 'person' : 'people'} to say hello`);
+      },
+      (error: unknown) => console.error(`[reminders] failed, ${error instanceof Error ? error.message : String(error)}`),
+    );
+  },
+  // Often enough that even a short trial window (HELLO_WINDOW_HOURS=0.05) gets its reminder.
+  Math.max(5_000, Math.min(60_000, Math.floor(reminderLead / 3))),
+);
+
 const port = Number(process.env.PORT ?? 3000);
 const hostname = process.env.HOST ?? '0.0.0.0';
 const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
@@ -129,7 +148,7 @@ const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
     `  rounds   ${process.env.ROUND_DAY ?? 'SUN'} ${process.env.ROUND_TIME ?? '20:00'} ${schedule.timeZone}, ` +
       (autorun ? `run automatically; next ${nextRoundAt(new Date(), schedule).toISOString()}` : 'run by hand (ROUND_AUTORUN=false)'),
   );
-  console.log(`  hello    ${describeWindow(helloWindowMs)} to say hello after a round`);
+  console.log(`  hello    ${describeWindow(helloWindowMs)} to say hello after a round; a reminder ${describeWindow(reminderLead)} before it closes`);
   if (mailConfig.kind === 'console') console.log('  sign-in codes are printed here, not emailed');
 });
 
@@ -143,6 +162,7 @@ const listener = listenLive(databaseUrl, (userIds, event) => live.deliver(userId
 
 const shutdown = async () => {
   scheduler?.stop();
+  clearInterval(reminders);
   await listener.stop();
   await live.close();
   await prisma.$disconnect();

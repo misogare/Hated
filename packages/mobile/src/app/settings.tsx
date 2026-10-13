@@ -26,7 +26,7 @@ const NOTIFICATIONS: { kind: keyof NotificationPrefs; label: string; hint: strin
   { kind: 'rounds', label: 'Round results', hint: "When a round's matches are in" },
 ];
 
-const ALL_ON: NotificationPrefs = { messages: true, hellos: true, rounds: true };
+const ALL_ON: NotificationPrefs = { messages: true, hellos: true, rounds: true, reminders: true };
 
 /**
  * Settings, opened from home: the account, shortcuts to each editor, which

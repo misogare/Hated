@@ -26,7 +26,7 @@ const ACCOUNT: AccountView = {
   },
   photos: [],
   onboarding: { profile: true, answers: true, photos: true },
-  notifications: { messages: true, hellos: true, rounds: true },
+  notifications: { messages: true, hellos: true, rounds: true, reminders: true },
 };
 
 /** Every service fails loudly unless a test stubs it. */
@@ -552,17 +552,30 @@ describe('privacy', () => {
     const res = await app({
       setNotificationPrefs: async (userId, changes) => {
         seen = { userId, changes };
-        return { messages: true, hellos: true, rounds: false };
+        return { messages: true, hellos: true, rounds: false, reminders: true };
       },
     }).request('/me/notifications', send('PUT', { rounds: false }, bearer));
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ messages: true, hellos: true, rounds: false });
+    expect(await res.json()).toEqual({ messages: true, hellos: true, rounds: false, reminders: true });
     expect(seen).toEqual({ userId: 'user-1', changes: { rounds: false } });
   });
 
+  it('turns the reminder before the time to say hello runs out on and off', async () => {
+    let seen: unknown;
+    const res = await app({
+      setNotificationPrefs: async (_userId, changes) => {
+        seen = changes;
+        return { messages: true, hellos: true, rounds: true, reminders: false };
+      },
+    }).request('/me/notifications', send('PUT', { reminders: false }, bearer));
+
+    expect(res.status).toBe(200);
+    expect(seen).toEqual({ reminders: false });
+  });
+
   it('refuses notification settings it does not know', async () => {
-    const a = app({ setNotificationPrefs: async () => ({ messages: true, hellos: true, rounds: true }) });
+    const a = app({ setNotificationPrefs: async () => ({ messages: true, hellos: true, rounds: true, reminders: true }) });
     expect((await a.request('/me/notifications', send('PUT', { marketing: false }, bearer))).status).toBe(400);
     expect((await a.request('/me/notifications', send('PUT', { messages: 'no' }, bearer))).status).toBe(400);
   });
@@ -589,7 +602,7 @@ describe('data export', () => {
     version: 1 as const,
     exportedAt: NOW.toISOString(),
     about: 'Everything HateD holds about you.',
-    account: { email: 'sam@vu.edu.au', emailVerified: true, createdAt: NOW.toISOString(), notifications: { messages: true, hellos: true, rounds: true } },
+    account: { email: 'sam@vu.edu.au', emailVerified: true, createdAt: NOW.toISOString(), notifications: { messages: true, hellos: true, rounds: true, reminders: true } },
     emailVerifications: [],
     profile: null,
     answers: [],

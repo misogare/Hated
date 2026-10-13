@@ -99,7 +99,10 @@ function load(): Account | null {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     const stored = raw ? (JSON.parse(raw) as Stored) : null;
-    return stored?.version === 1 ? stored.account : null;
+    if (stored?.version !== 1) return null;
+    // Saved before reminders existed: they're on, as for everyone.
+    if (stored.account !== null) (stored.account.notifications as Partial<Api.NotificationPrefs>).reminders ??= true;
+    return stored.account;
   } catch {
     return null;
   }
@@ -335,7 +338,7 @@ function newAccount(email: string): Account {
       full: portrait(look, index, email, 'full'),
       blurred: portrait(look, index, email, 'blurred'),
     })),
-    notifications: { messages: true, hellos: true, rounds: true },
+    notifications: { messages: true, hellos: true, rounds: true, reminders: true },
     rounds: [],
     matches: [],
     counter: 2,

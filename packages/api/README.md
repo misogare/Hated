@@ -78,6 +78,13 @@ that isn't mutual is over; one that became mutual in time stays open. It reads
 the same to both people, so the one who didn't say hello never learns whether
 the other did. The round's push says how long there is.
 
+Shortly before the window closes (4 hours before, or a quarter of a shorter
+window), everyone who hasn't said hello yet gets a reminder push, worded the
+same whether or not the other person has. The API checks about once a minute;
+each reminder is claimed in the database before it goes out, so it is sent once
+even with several servers. People can turn reminders off in settings
+(`reminders` in `PUT /me/notifications`).
+
 ## Live updates
 
 The app keeps a WebSocket open at `/live` while signed in. Its first message

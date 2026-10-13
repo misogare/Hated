@@ -150,7 +150,12 @@ const ProfileBody = z.object({
 const ActiveBody = z.object({ active: z.boolean() });
 const SignOutBody = z.object({ everywhere: z.boolean().optional(), pushToken: z.string().max(300).optional() });
 const PushTokenBody = z.object({ token: z.string().max(300), platform: z.string().max(20) });
-const NotificationsBody = z.strictObject({ messages: z.boolean().optional(), hellos: z.boolean().optional(), rounds: z.boolean().optional() });
+const NotificationsBody = z.strictObject({
+  messages: z.boolean().optional(),
+  hellos: z.boolean().optional(),
+  rounds: z.boolean().optional(),
+  reminders: z.boolean().optional(),
+});
 const Key = z.string().min(1).max(64);
 const AnswersBody = z.object({
   answers: z.record(Key, z.union([z.number(), z.string().max(200), z.null()])),
