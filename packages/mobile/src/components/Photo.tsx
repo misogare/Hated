@@ -1,6 +1,7 @@
 import type { Photo } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useSession } from '@/session';
@@ -19,11 +20,15 @@ interface ProfilePhotoProps {
 /** One photo, blurred or not. The API decides what this person may see; this only asks. */
 export function ProfilePhoto({ photo, unlocked, style }: ProfilePhotoProps) {
   const { api } = useSession();
-  const blurred = api.photoSource(photo.id, 'blurred');
+  // The same source objects from one render to the next: a new one makes the
+  // image load again and replay its fade, so it flickered whenever a screen
+  // re-rendered (a chat on every keystroke and message).
+  const blurred = useMemo(() => api.photoSource(photo.id, 'blurred'), [api, photo.id]);
+  const full = useMemo(() => (unlocked ? api.photoSource(photo.id, 'full') : null), [api, photo.id, unlocked]);
   return (
     <View style={[styles.frame, style]}>
       <Image
-        source={unlocked ? api.photoSource(photo.id, 'full') : blurred}
+        source={full ?? blurred}
         placeholder={unlocked ? blurred : null}
         placeholderContentFit="cover"
         contentFit="cover"
