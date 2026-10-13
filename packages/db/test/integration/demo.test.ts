@@ -29,7 +29,7 @@ describe.skipIf(!hasTestDatabase)('demo population (Postgres)', () => {
     for (const user of users) {
       expect(user.email.endsWith(`@${DEMO_DOMAIN}`)).toBe(true);
       const account = await getAccount(prisma, user.id);
-      expect(account?.onboarding).toEqual({ profile: true, answers: true });
+      expect(account?.onboarding).toEqual({ profile: true, answers: true, photos: false });
       expect(account?.institution?.name).toBe('HateD Demo University');
     }
     expect(await prisma.profileTrait.count()).toBeGreaterThanOrEqual(12 * 5);

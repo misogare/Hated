@@ -12,6 +12,9 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import type { PhotoStore } from './photo-store.js';
+import { photoKey } from './photos.js';
+import { toPromptAnswers } from './profile-words.js';
 
 export const EXPORT_VERSION = 1;
 
@@ -43,9 +46,14 @@ export interface AccountExport {
     /** Empty means open to everyone. */
     openTo: string[];
     takingPartInRounds: boolean;
+    /** Their line in their own words. */
+    bio: string | null;
+    prompts: Array<{ prompt: string; answer: string }>;
     createdAt: string;
     updatedAt: string;
   } | null;
+  /** Main first, each as the JPEG HateD keeps (never the blurred copy), base64-encoded. */
+  photos: Array<{ position: number; width: number; height: number; addedAt: string; jpegBase64: string | null }>;
   answers: Array<{ question: string; prompt: string; answer: unknown; firstAnsweredAt: string }>;
   /** What matching uses, worked out from the answers: each trait from 0 to 1. */
   traits: Record<string, number>;
@@ -68,7 +76,7 @@ export interface AccountExport {
 }
 
 const ABOUT =
-  'Everything HateD holds about you. Left out: other people\'s names and messages, and reports other people made ' +
+  'Everything HateD holds about you, your photos included (as base64-encoded JPEG). Left out: other people\'s names and messages, and reports other people made ' +
   '(that is their data), and security secrets such as sign-in codes and session keys, which are stored only as ' +
   'one-way hashes, and the addresses that let us send notifications to your phone.';
 
@@ -78,6 +86,7 @@ const isoOrNull = (date: Date | null) => (date === null ? null : date.toISOStrin
 /** The person's data, or null if there is no such account. */
 export async function exportAccount(
   prisma: PrismaClient,
+  store: PhotoStore,
   userId: string,
   options: { now?: Date } = {},
 ): Promise<AccountExport | null> {
@@ -90,6 +99,8 @@ export async function exportAccount(
       profile: {
         include: {
           seeking: true,
+          prompts: { orderBy: { position: 'asc' } },
+          photos: { orderBy: { position: 'asc' } },
           traits: { orderBy: { key: 'asc' } },
           desires: { orderBy: { key: 'asc' } },
           blocksMade: { select: { blockedId: true } },
@@ -118,6 +129,15 @@ export async function exportAccount(
           },
           orderBy: { round: { startedAt: 'asc' } },
         });
+  const photos = await Promise.all(
+    (profile?.photos ?? []).map(async (photo) => ({
+      position: photo.position,
+      width: photo.width,
+      height: photo.height,
+      addedAt: iso(photo.createdAt),
+      jpegBase64: (await store.get(photoKey(photo.id, 'full')))?.toString('base64') ?? null,
+    })),
+  );
   const roundDate = (round: { startedAt: Date; completedAt: Date | null }) => iso(round.completedAt ?? round.startedAt);
   const blocked = new Set(profile?.blocksMade.map((block) => block.blockedId) ?? []);
 
@@ -149,9 +169,12 @@ export async function exportAccount(
             gender: profile.genderId,
             openTo: profile.seeking.map((row) => row.genderId),
             takingPartInRounds: profile.isActive,
+            bio: profile.bio,
+            prompts: toPromptAnswers(profile.prompts).map((prompt) => ({ prompt: prompt.label, answer: prompt.answer })),
             createdAt: iso(profile.createdAt),
             updatedAt: iso(profile.updatedAt),
           },
+    photos,
     answers: (profile?.responses ?? [])
       .flatMap((response) => response.answers)
       .sort((a, b) => a.question.position - b.question.position)

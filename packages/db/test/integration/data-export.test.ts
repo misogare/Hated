@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { saveAnswers, saveDesires } from '../../src/answers.js';
@@ -6,6 +7,9 @@ import { exportAccount } from '../../src/data-export.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { reportMatch } from '../../src/matches.js';
 import { setNotificationPrefs } from '../../src/notification-prefs.js';
+import { createMemoryPhotoStore } from '../../src/photo-store.js';
+import { addPhoto } from '../../src/photos.js';
+import { saveWords } from '../../src/profile-words.js';
 import { registerPushToken } from '../../src/push-tokens.js';
 import { sayHello } from '../../src/results.js';
 import { seedDatabase } from '../../src/seed.js';
@@ -15,6 +19,7 @@ import { NOW, member, roundMatching } from './fixtures.js';
 
 describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
   let prisma: PrismaClient;
+  const store = createMemoryPhotoStore();
 
   beforeEach(async () => {
     prisma ??= createTestClient();
@@ -39,6 +44,8 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
     await createSession(prisma, sam.userId, { now: NOW });
     await revokeSession(prisma, phone.token, { now: NOW });
     await registerPushToken(prisma, sam.userId, 'ExponentPushToken[sam-secret-phone]', 'ios');
+    await saveWords(prisma, sam.userId, { bio: 'Bookshop on Sunday.', prompts: [{ key: 'perfect-sunday', answer: 'Market, then cooking.' }] });
+    await addPhoto(prisma, store, sam.userId, await sharp({ create: { width: 600, height: 750, channels: 3, background: '#c08080' } }).jpeg().toBuffer());
 
     const withMaya = await roundMatching(prisma, sam.profileId, maya.profileId);
     await sayHello(prisma, sam.userId, withMaya.id);
@@ -56,7 +63,7 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
   it("holds everything that is the person's", async () => {
     const { sam, withMaya, withZara } = await samsHistory();
 
-    const data = await exportAccount(prisma, sam.userId, { now: NOW });
+    const data = await exportAccount(prisma, store, sam.userId, { now: NOW });
 
     expect(data).toMatchObject({
       format: 'hated-export',
@@ -64,11 +71,22 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
       exportedAt: NOW.toISOString(),
       account: { email: 'sam@vu.edu.au', emailVerified: true, notifications: { messages: true, hellos: true, rounds: false } },
       emailVerifications: [{ email: 'sam@vu.edu.au', institution: 'Victoria University', status: 'VERIFIED' }],
-      profile: { displayName: 'Sam', birthDate: '2003-04-20', gender: 'woman', openTo: ['woman'], takingPartInRounds: true },
+      profile: {
+        displayName: 'Sam',
+        birthDate: '2003-04-20',
+        gender: 'woman',
+        openTo: ['woman'],
+        takingPartInRounds: true,
+        bio: 'Bookshop on Sunday.',
+        prompts: [{ prompt: 'A perfect Sunday', answer: 'Market, then cooking.' }],
+      },
       hopes: { humor: { target: 0.9, weight: 1 } },
       reportsYouMade: [{ matchId: withZara.id, reason: 'spam', details: 'Links again.', reviewed: false }],
       notificationDevices: [{ platform: 'ios' }],
     });
+    expect(data?.photos).toHaveLength(1);
+    expect(data?.photos[0]).toMatchObject({ position: 0, width: 600, height: 750 });
+    expect((await sharp(Buffer.from(data!.photos[0]!.jpegBase64!, 'base64')).metadata()).format).toBe('jpeg');
     expect(data?.answers.map(({ question, answer }) => [question, answer])).toEqual([
       ['humor', 0.8],
       ['weekend', 'outdoors'],
@@ -88,7 +106,7 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
     const { sam } = await samsHistory();
 
     // Sam's own message names Maya; that much is Sam's to keep.
-    const text = JSON.stringify(await exportAccount(prisma, sam.userId, { now: NOW })).replace('Hi Maya!', '');
+    const text = JSON.stringify(await exportAccount(prisma, store, sam.userId, { now: NOW })).replace('Hi Maya!', '');
 
     for (const other of ['Maya', 'Zara', 'maya@vu.edu.au', 'zara@vu.edu.au', 'from Maya', 'rude', 'harassment']) {
       expect(text).not.toContain(other);
@@ -101,12 +119,12 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
   it('works before onboarding, and is null for no account', async () => {
     const user = await prisma.user.create({ data: { email: 'new@vu.edu.au' } });
 
-    expect(await exportAccount(prisma, user.id, { now: NOW })).toMatchObject({
+    expect(await exportAccount(prisma, store, user.id, { now: NOW })).toMatchObject({
       account: { email: 'new@vu.edu.au', emailVerified: false },
       profile: null,
       answers: [],
       matches: [],
     });
-    expect(await exportAccount(prisma, 'nobody')).toBeNull();
+    expect(await exportAccount(prisma, store, 'nobody')).toBeNull();
   });
 });

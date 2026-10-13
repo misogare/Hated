@@ -129,6 +129,8 @@ model Profile {
   birthDate   DateTime
   genderId    String
   isActive    Boolean  @default(true)
+  /// One line in their own words, shown to a match. Up to 120 characters.
+  bio         String?
 
   // Per-person ranking weights. Null falls back to the round's FirstDateConfig.
   similarityWeight  Float?
@@ -151,10 +153,46 @@ model Profile {
   messagesSent      Message[]
   reportsMade       Report[]                @relation("reporter")
   reportsAboutMe    Report[]                @relation("reported")
+  photos            Photo[]
+  prompts           ProfilePrompt[]
 
   @@index([genderId])
   @@index([isActive])
   @@map("profiles")
+}
+
+/// A profile photo; position 0 is the main one. The upload itself is never
+/// kept: the photo store holds a resized copy with its metadata stripped, and a
+/// heavily blurred copy, which is all a match sees until both have said hello.
+/// Files are keyed by the photo's id.
+model Photo {
+  id        String   @id @default(cuid())
+  profileId String
+  position  Int
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, position])
+  @@map("photos")
+}
+
+/// A profile's answer to one of the app's prompts ("A perfect Sunday"). The
+/// prompt list lives in code; `key` names one of them.
+model ProfilePrompt {
+  id        String @id @default(cuid())
+  profileId String
+  key       String
+  answer    String
+  position  Int
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, key])
+  @@index([profileId, position])
+  @@map("profile_prompts")
 }
 
 /// Genders a profile accepts. No rows means "open to everyone", matching the

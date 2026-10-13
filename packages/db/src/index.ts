@@ -119,6 +119,44 @@ export { createNotifier, silentNotifier, type Notifier } from './notify.js';
 
 export { deleteAccount } from './accounts.js';
 
+export { createDiskPhotoStore, createMemoryPhotoStore, defaultPhotoDir, type PhotoStore } from './photo-store.js';
+
+export { MAX_UPLOAD_BYTES, MIN_PHOTO_SIDE, processPhoto, type ProcessPhotoResult, type ProcessedPhoto } from './photo-processing.js';
+
+export {
+  MAX_PHOTOS,
+  MIN_PHOTOS,
+  addPhoto,
+  deletePhoto,
+  listPhotos,
+  photoAccess,
+  photoKey,
+  readPhoto,
+  removePhotoFiles,
+  reorderPhotos,
+  type AddPhotoResult,
+  type PhotoVariant,
+  type PhotoView,
+  type ReorderPhotosResult,
+} from './photos.js';
+
+export {
+  MAX_BIO_LENGTH,
+  MAX_PROMPTS,
+  MAX_PROMPT_ANSWER_LENGTH,
+  PROMPTS,
+  saveWords,
+  validateWords,
+  type PromptAnswer,
+  type SaveWordsResult,
+  type WordsInput,
+  type WordsView,
+} from './profile-words.js';
+
+export { describePerson, suggestOpeners } from './descriptions.js';
+
+export { profileCard, type ProfileCard } from './profile-card.js';
+
 export { EXPORT_VERSION, exportAccount, type AccountExport } from './data-export.js';
 
 export {

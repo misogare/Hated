@@ -23,7 +23,7 @@ describe.skipIf(!hasTestDatabase)('profile, answers and desires (Postgres)', () 
   describe('profile', () => {
     it('walks onboarding: no profile, then profile, then answers', async () => {
       const user = await prisma.user.create({ data: { email: 'sam@vu.edu.au' } });
-      expect((await getAccount(prisma, user.id))?.onboarding).toEqual({ profile: false, answers: false });
+      expect((await getAccount(prisma, user.id))?.onboarding).toEqual({ profile: false, answers: false, photos: false });
 
       await saveProfile(prisma, user.id, { displayName: ' Sam ', birthDate: new Date('2003-04-20'), gender: 'woman', seeking: [] }, { now: NOW });
       const account = await getAccount(prisma, user.id, { now: NOW });
@@ -34,11 +34,17 @@ describe.skipIf(!hasTestDatabase)('profile, answers and desires (Postgres)', () 
         gender: 'woman',
         seeking: [],
         isActive: true,
+        bio: null,
+        prompts: [],
+        highlights: [],
       });
-      expect(account?.onboarding).toEqual({ profile: true, answers: false });
+      expect(account?.photos).toEqual([]);
+      expect(account?.onboarding).toEqual({ profile: true, answers: false, photos: false });
 
       await saveAnswers(prisma, user.id, { humor: 0.8 });
-      expect((await getAccount(prisma, user.id))?.onboarding).toEqual({ profile: true, answers: true });
+      const answered = await getAccount(prisma, user.id);
+      expect(answered?.onboarding).toEqual({ profile: true, answers: true, photos: false });
+      expect(answered?.profile?.highlights).toEqual(['Humor comes first']);
     });
 
     it('replaces who someone is open to, and reports the verified institution', async () => {

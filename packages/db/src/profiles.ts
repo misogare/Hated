@@ -9,6 +9,9 @@
 
 import type { PrismaClient } from './generated/prisma/client.js';
 import type { NotificationPrefs } from './notification-prefs.js';
+import { MIN_PHOTOS, type PhotoView } from './photos.js';
+import { profileCard } from './profile-card.js';
+import type { PromptAnswer } from './profile-words.js';
 
 /** Nobody under this age can hold a profile. */
 export const MIN_AGE = 18;
@@ -44,9 +47,16 @@ export interface AccountView {
     gender: string;
     seeking: string[];
     isActive: boolean;
+    /** Their line in their own words. */
+    bio: string | null;
+    prompts: PromptAnswer[];
+    /** What a match reads about them, worked out from their questionnaire. */
+    highlights: string[];
   } | null;
+  /** Their photos, main first. */
+  photos: PhotoView[];
   /** Which onboarding steps are done, so the app knows where to resume. */
-  onboarding: { profile: boolean; answers: boolean };
+  onboarding: { profile: boolean; answers: boolean; photos: boolean };
   /** Which push notifications they want. */
   notifications: NotificationPrefs;
 }
@@ -148,6 +158,7 @@ export async function getAccount(
 
   const profile = user.profile;
   const institution = user.verifications[0]?.institution ?? null;
+  const card = profile === null ? null : await profileCard(prisma, profile.id);
   return {
     userId: user.id,
     email: user.email,
@@ -163,8 +174,16 @@ export async function getAccount(
             gender: profile.genderId,
             seeking: profile.seeking.map((row) => row.genderId),
             isActive: profile.isActive,
+            bio: card?.bio ?? null,
+            prompts: card?.prompts ?? [],
+            highlights: card?.highlights ?? [],
           },
-    onboarding: { profile: profile !== null, answers: (profile?.responses.length ?? 0) > 0 },
+    photos: card?.photos ?? [],
+    onboarding: {
+      profile: profile !== null,
+      answers: (profile?.responses.length ?? 0) > 0,
+      photos: (card?.photos.length ?? 0) >= MIN_PHOTOS,
+    },
     notifications: { messages: user.notifyMessages, hellos: user.notifyHellos, rounds: user.notifyRounds },
   };
 }

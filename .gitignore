@@ -9,3 +9,6 @@ coverage/
 
 # Prisma Client is generated from prisma/schema.prisma, never committed.
 **/src/generated/
+
+# Uploaded photos (PHOTO_DIR's default), never committed.
+packages/db/data/

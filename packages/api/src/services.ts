@@ -29,12 +29,13 @@ import {
   startSignIn,
   verifyCode,
   type Mailer,
+  type PhotoStore,
   type PrismaClient,
 } from '@hated/db';
 
 import type { ApiServices } from './app.js';
 
-export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServices {
+export function createDbServices(prisma: PrismaClient, mailer: Mailer, photos: PhotoStore): ApiServices {
   return {
     startSignIn: (email) => startSignIn(prisma, { email }, { mailer }),
     verifyCode: (input) => verifyCode(prisma, input),
@@ -61,7 +62,7 @@ export function createDbServices(prisma: PrismaClient, mailer: Mailer): ApiServi
     unregisterPushToken: (userId, token) => unregisterPushToken(prisma, userId, token),
     unregisterAllPushTokens: (userId) => unregisterAllPushTokens(prisma, userId),
     setNotificationPrefs: (userId, changes) => setNotificationPrefs(prisma, userId, changes),
-    deleteAccount: (userId) => deleteAccount(prisma, userId),
-    exportAccount: (userId) => exportAccount(prisma, userId),
+    deleteAccount: (userId) => deleteAccount(prisma, photos, userId),
+    exportAccount: (userId) => exportAccount(prisma, photos, userId),
   };
 }

@@ -9,18 +9,21 @@
  * reach it); ROUND_DAY / ROUND_TIME / ROUND_TIMEZONE for when rounds close
  * (SUN, 20:00, Australia/Melbourne); ROUND_AUTORUN=false to stop this server
  * running rounds itself; TRUST_PROXY=true behind a reverse proxy, so the
- * per-IP sign-in limits read X-Forwarded-For; and EXPO_ACCESS_TOKEN if the
- * Expo project requires one for sending push notifications.
+ * per-IP sign-in limits read X-Forwarded-For; EXPO_ACCESS_TOKEN if the Expo
+ * project requires one for sending push notifications; and PHOTO_DIR for where
+ * photos are kept (packages/db/data/photos).
  */
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  createDiskPhotoStore,
   createExpoPushSender,
   createMailer,
   createNotifier,
   createPrismaClient,
+  defaultPhotoDir,
   describeMailConfig,
   resolveMailConfig,
   runScheduledRound,
@@ -59,6 +62,8 @@ try {
 const trustProxy = (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true';
 
 const prisma = createPrismaClient();
+const photoDir = process.env.PHOTO_DIR?.trim() || defaultPhotoDir();
+const photos = createDiskPhotoStore(photoDir);
 const notifier = createNotifier(
   prisma,
   createExpoPushSender({ accessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || undefined }),
@@ -66,7 +71,7 @@ const notifier = createNotifier(
 );
 const app = createApp({
   notifier,
-  services: createDbServices(prisma, createMailer(mailConfig)),
+  services: createDbServices(prisma, createMailer(mailConfig), photos),
   clientIp: (c) => {
     if (trustProxy) {
       const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
@@ -95,6 +100,7 @@ const hostname = process.env.HOST ?? '0.0.0.0';
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`HateD API on http://${hostname}:${info.port}`);
   console.log(`  mail     ${describeMailConfig(mailConfig)}`);
+  console.log(`  photos   ${photoDir}`);
   console.log(
     `  rounds   ${process.env.ROUND_DAY ?? 'SUN'} ${process.env.ROUND_TIME ?? '20:00'} ${schedule.timeZone}, ` +
       (autorun ? `run automatically; next ${nextRoundAt(new Date(), schedule).toISOString()}` : 'run by hand (ROUND_AUTORUN=false)'),

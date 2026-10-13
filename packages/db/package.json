@@ -42,7 +42,8 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "nodemailer": "^10.0.15",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
