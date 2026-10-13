@@ -1,0 +1,13 @@
+{
+  "//": "The end-to-end tests run in Node (Playwright), not in the app, so they get Node's types and the app doesn't.",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"]
+}

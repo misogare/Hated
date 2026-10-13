@@ -8,6 +8,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
+/** A small photo to add, as a picker would hand it over. */
+const PHOTO = Buffer.from(
+  '/9j/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCACWAHgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCsBemAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/Z',
+  'base64',
+);
+
 /** Set a slider by pressing at a fraction of its track, as a finger would. */
 async function slide(page: Page, slider: Locator, fraction: number) {
   const box = await slider.boundingBox();
@@ -69,6 +75,11 @@ test("a visitor's first weeks", async ({ page }) => {
     await button(page, 'Next: photos and words').click();
 
     await expect(page.getByText('2 of 6')).toBeVisible();
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add a photo' }).first().click()]);
+    await chooser.setFiles({ name: 'me.jpg', mimeType: 'image/jpeg', buffer: PHOTO });
+    await expect(page.getByText('3 of 6')).toBeVisible();
+    await expect(page.getByText('In review', { exact: true })).toBeVisible();
+    await expect(page.getByText('Photos marked "In review" are checked', { exact: false })).toBeVisible();
     await page.getByRole('textbox', { name: 'A line about you', exact: true }).fill('Bookshops, long walks and far too much coffee.');
     await page.getByRole('textbox', { name: 'A perfect Sunday', exact: true }).fill('A slow breakfast, a long walk, and a film I can quote.');
     await button(page, 'Save and finish').click();

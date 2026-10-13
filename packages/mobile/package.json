@@ -12,7 +12,7 @@
     "demo": "node scripts/demo.mjs",
     "demo:export": "node scripts/demo.mjs export",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p e2e",
     "lint": "expo lint"
   },
   "dependencies": {

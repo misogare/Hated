@@ -62,6 +62,9 @@ works out from the questionnaire. Finishing needs two photos.
 Photos are fetched with `expo-image`, sending the session token, so the API
 decides on every request what this person may see: a match's photos blurred
 until both have said hello, then the real ones fading in over the blurred.
+A new photo waits for a review before any match sees it: its tile says "In
+review", or "Not approved" if it was turned down (which then doesn't count
+toward the two a profile needs). In the web demo, the review takes 10 seconds.
 
 **The reveal** opens a sealed envelope, then the other person's profile. After
 "Say hello" it looks for their hello every four seconds; once both have, the

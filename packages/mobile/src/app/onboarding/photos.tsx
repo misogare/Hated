@@ -1,4 +1,4 @@
-import type { Photo, Prompt } from '@hated/api/contract';
+import type { OwnPhoto, Prompt } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -39,7 +39,7 @@ export default function PhotosAndWords() {
   const editing = edit === '1';
   const { account, api, refresh } = useSession();
 
-  const [photos, setPhotos] = useState<Photo[]>(account?.photos ?? []);
+  const [photos, setPhotos] = useState<OwnPhoto[]>(account?.photos ?? []);
   const [uploading, setUploading] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
@@ -66,7 +66,8 @@ export default function PhotosAndWords() {
   }, [api]);
 
   const total = photos.length + uploading.length;
-  const missing = Math.max(0, MIN_PHOTOS - photos.length);
+  // A photo that wasn't approved doesn't count, as on the server.
+  const missing = Math.max(0, MIN_PHOTOS - photos.filter((photo) => photo.review !== 'rejected').length);
   const label = (key: string) => choices?.find((prompt) => prompt.key === key)?.label ?? '';
 
   async function pick() {
@@ -164,7 +165,7 @@ export default function PhotosAndWords() {
             <Pressable
               key={photo.id}
               accessibilityRole="button"
-              accessibilityLabel={`Photo ${index + 1}${index === 0 ? ', your main photo' : ''}`}
+              accessibilityLabel={`Photo ${index + 1}${index === 0 ? ', your main photo' : ''}${photo.review === 'approved' ? '' : photo.review === 'pending' ? ', in review' : ', not approved'}`}
               accessibilityHint="Shows what you can do with it"
               accessibilityState={{ selected: selected === photo.id }}
               onPress={() => setSelected(selected === photo.id ? null : photo.id)}
@@ -176,6 +177,13 @@ export default function PhotosAndWords() {
                   <Text style={styles.mainTagText}>Main</Text>
                 </View>
               ) : null}
+              {photo.review === 'approved' ? null : (
+                <View style={[styles.reviewTag, photo.review === 'rejected' && styles.reviewTagRejected]}>
+                  <Text style={[styles.reviewTagText, photo.review === 'rejected' && styles.reviewTagTextRejected]}>
+                    {photo.review === 'pending' ? 'In review' : 'Not approved'}
+                  </Text>
+                </View>
+              )}
               {preview ? (
                 <View style={styles.tileLock}>
                   <Feather name="lock" size={12} color={day.honey} />
@@ -221,6 +229,12 @@ export default function PhotosAndWords() {
             </Pressable>
           </View>
         )}
+
+        {photos.some((photo) => photo.review === 'rejected') ? (
+          <Notice kind="error">A photo wasn't approved, so no match will see it. Remove it and add another.</Notice>
+        ) : photos.some((photo) => photo.review === 'pending') ? (
+          <Notice kind="info">Photos marked "In review" are checked before a match can see them. It's usually quick.</Notice>
+        ) : null}
 
         <View style={styles.previewRow}>
           <Text style={styles.previewText}>See them as your match will</Text>
@@ -371,6 +385,10 @@ const styles = StyleSheet.create({
   },
   mainTag: { position: 'absolute', left: 8, top: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: 'rgba(251, 243, 238, 0.94)' },
   mainTagText: { fontFamily: fonts.bodyBold, fontSize: 11, color: day.ink },
+  reviewTag: { position: 'absolute', right: 8, top: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: 'rgba(58, 30, 42, 0.82)' },
+  reviewTagRejected: { backgroundColor: day.danger },
+  reviewTagText: { fontFamily: fonts.bodyBold, fontSize: 11, color: '#FFFFFF' },
+  reviewTagTextRejected: { color: '#FFFFFF' },
   empty: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#C9A99F', backgroundColor: day.card, alignItems: 'center', justifyContent: 'center', gap: 6 },
   plus: { width: 34, height: 34, borderRadius: 17, backgroundColor: day.tint, alignItems: 'center', justifyContent: 'center' },
   addText: { fontFamily: fonts.bodySemi, fontSize: 12.5, color: day.accent },
