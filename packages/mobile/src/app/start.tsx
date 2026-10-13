@@ -7,5 +7,6 @@ export default function Start() {
   const { account } = useSession();
   if (account?.onboarding.profile !== true) return <Redirect href="/onboarding/about" />;
   if (!account.onboarding.answers) return <Redirect href="/onboarding/questions" />;
+  if (!account.onboarding.photos) return <Redirect href="/onboarding/photos" />;
   return <Redirect href="/home" />;
 }

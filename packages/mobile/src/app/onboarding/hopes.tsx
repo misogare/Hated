@@ -59,7 +59,7 @@ export default function Hopes() {
     try {
       await api.saveDesires(Object.fromEntries(traits.map((trait) => [trait.traitKey!, desireFor(trait.traitKey!)])));
       if (editing) router.back();
-      else router.push('/onboarding/done');
+      else router.push('/onboarding/photos');
     } catch (caught) {
       setError(describeError(caught));
     } finally {
@@ -70,13 +70,13 @@ export default function Hopes() {
   return (
     <Screen
       scroll
-      footer={<Button label={editing ? 'Save' : 'Finish'} onPress={() => void save()} disabled={traits === null} busy={busy} />}
+      footer={<Button label={editing ? 'Save' : 'Next: photos and words'} onPress={() => void save()} disabled={traits === null} busy={busy} />}
     >
       <View style={styles.top}>
         <BackButton />
         {editing ? null : (
           <View style={styles.fill}>
-            <Steps step={3} total={3} />
+            <Steps step={3} total={4} />
           </View>
         )}
       </View>

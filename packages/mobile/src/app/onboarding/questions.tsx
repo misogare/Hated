@@ -92,7 +92,7 @@ export default function Questions() {
       <View style={styles.top}>
         <BackButton onPress={back} />
         <View style={styles.fill}>
-          <Steps step={2} total={3} caption={`${editing ? 'Your answers' : 'Step 2 of 3'} · Question ${index + 1} of ${questions.length}`} />
+          <Steps step={2} total={4} caption={`${editing ? 'Your answers' : 'Step 2 of 4'} · Question ${index + 1} of ${questions.length}`} />
         </View>
       </View>
 

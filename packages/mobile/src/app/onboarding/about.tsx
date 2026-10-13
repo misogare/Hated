@@ -58,7 +58,7 @@ export default function About() {
         {editing ? <BackButton /> : null}
         {editing ? null : (
           <View style={styles.fill}>
-            <Steps step={1} total={3} />
+            <Steps step={1} total={4} />
           </View>
         )}
       </View>

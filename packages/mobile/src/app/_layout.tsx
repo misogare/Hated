@@ -75,6 +75,7 @@ function Routes() {
         <Stack.Screen name="onboarding/about" />
         <Stack.Screen name="onboarding/questions" />
         <Stack.Screen name="onboarding/hopes" />
+        <Stack.Screen name="onboarding/photos" />
         <Stack.Screen name="onboarding/done" />
         <Stack.Screen name="home" />
         <Stack.Screen name="reveal" />

@@ -15,6 +15,7 @@ import { fonts, night } from '@/theme';
 
 const EDITORS: { label: string; hint: string; href: Href }[] = [
   { label: 'About you', hint: 'Name, birthday, who you are open to', href: { pathname: '/onboarding/about', params: { edit: '1' } } },
+  { label: 'Photos and words', hint: 'What a match sees before saying hello', href: { pathname: '/onboarding/photos', params: { edit: '1' } } },
   { label: 'Your answers', hint: 'The questions about you', href: { pathname: '/onboarding/questions', params: { edit: '1' } } },
   { label: 'What matters', hint: 'What you hope for in someone', href: { pathname: '/onboarding/hopes', params: { edit: '1' } } },
 ];
