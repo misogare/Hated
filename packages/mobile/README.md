@@ -39,6 +39,7 @@ for quick layout checks; the phone is the real target.
 | `src/app/_layout.tsx` | Loads the fonts and decides which routes exist with `Stack.Protected`, so signing in or out moves you to the right place. |
 | `src/session.tsx` | The session: token in the keychain/keystore (`expo-secure-store`), the account, and an API client that signs out on any 401. |
 | `src/api/client.ts` | Typed calls to the API, plus friendly wording for its errors. |
+| `src/live.tsx` | The live connection: a WebSocket to the API while signed in, so screens hear at once about a hello back, a message, an ended match or a round. |
 | `src/notifications.ts` | Push notifications: permission, registering this device with the API, and opening the screen a tapped notification is about. |
 | `src/theme.ts` | Colours, fonts and shadows. Day palette for sign-in and profile; night palette for rounds. |
 | `src/motion.ts` | The native-driver flag and `useReducedMotion`: nothing animates for someone who asked their device for less motion. |
@@ -68,7 +69,15 @@ the two said hello first as well as the one who completed it. `?matchId=` opens
 any earlier match the same way.
 
 Chat opens from home, the reveal or the matches list once both people have said
-hello; an empty conversation suggests three openers from what the two share. It polls
+hello; an empty conversation suggests three openers from what the two share.
+
+**Live updates** come over a WebSocket (`src/live.tsx`): home, the matches list,
+the reveal and the chat refresh the moment something changes for this person.
+If the other person says hello back while someone is on home or their matches,
+the app plays the "you both said hello" moment and opens the chat. Screens still
+poll now and then (rarely while the connection is up), so nothing is lost if it
+drops; it reconnects by itself, and at once when the app comes back to the
+foreground. It polls
 for new messages every 3 seconds while the screen is open, and closes for both
 if either passes or reports. "Your matches" lists every match from every round
 with its last message, so earlier conversations stay reachable; unread counts

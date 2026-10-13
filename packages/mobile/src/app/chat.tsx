@@ -11,12 +11,14 @@ import { MeetingCircles } from '@/components/MeetingCircles';
 import { Avatar } from '@/components/Photo';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
+import { useLive, useLiveConnected } from '@/live';
 import { useOpenChat } from '@/notifications';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
-/** How often to look for new messages while the conversation is open. */
+/** How often to look for new messages while the conversation is open, without and with the live connection. */
 const POLL_MS = 3000;
+const POLL_LIVE_MS = 15_000;
 const MAX_LENGTH = 2000;
 
 /** The conversation with a match, once both have said hello. */
@@ -30,6 +32,7 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState<string | null>(null);
   const newest = useRef<string | undefined>(undefined);
+  const live = useLiveConnected();
   useOpenChat(matchId);
 
   /** Add messages not seen yet, keeping order and the newest id for the next poll. */
@@ -63,13 +66,18 @@ export default function Chat() {
     }
   }, [api, matchId, merge]);
 
-  // Poll only while the screen is in view.
+  // New messages (and the match ending) arrive over the live connection at once.
+  useLive((event) => {
+    if ((event.type === 'message' || event.type === 'ended') && event.matchId === matchId) void poll();
+  });
+
+  // Poll only while the screen is in view, and rarely while the live connection is up.
   useFocusEffect(
     useCallback(() => {
       void poll();
-      const timer = setInterval(() => void poll(), POLL_MS);
+      const timer = setInterval(() => void poll(), live ? POLL_LIVE_MS : POLL_MS);
       return () => clearInterval(timer);
-    }, [poll]),
+    }, [poll, live]),
   );
 
   async function send() {

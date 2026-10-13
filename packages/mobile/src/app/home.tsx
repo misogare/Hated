@@ -12,6 +12,7 @@ import { LockBadge, ProfilePhoto } from '@/components/Photo';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow } from '@/components/Text';
 import { roundTime } from '@/copy';
+import { useLive } from '@/live';
 import { registerForPush, useNotificationRouting } from '@/notifications';
 import { useSession } from '@/session';
 import { fonts, night, shadows } from '@/theme';
@@ -50,6 +51,8 @@ export default function Home() {
     });
   }, [api]);
   useNotificationRouting(load);
+  // Anything that changes for this person (a hello back, a message, a round) shows at once.
+  useLive(() => void load());
 
   async function toggle(active: boolean) {
     if (home === null) return;

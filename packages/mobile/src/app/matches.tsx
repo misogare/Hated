@@ -9,6 +9,7 @@ import { BackButton, Notice } from '@/components/Controls';
 import { Avatar } from '@/components/Photo';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow, Title } from '@/components/Text';
+import { useLive } from '@/live';
 import { useSession } from '@/session';
 import { fonts, night } from '@/theme';
 
@@ -18,18 +19,20 @@ export default function Matches() {
   const [matches, setMatches] = useState<MatchSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Reload on focus, so unread counts drop after reading a conversation.
-  useFocusEffect(
-    useCallback(() => {
-      api.matches().then(
-        (response) => {
-          setMatches(response.matches);
-          setError(null);
-        },
-        (caught: unknown) => setError(describeError(caught)),
-      );
-    }, [api]),
-  );
+  const load = useCallback(() => {
+    api.matches().then(
+      (response) => {
+        setMatches(response.matches);
+        setError(null);
+      },
+      (caught: unknown) => setError(describeError(caught)),
+    );
+  }, [api]);
+
+  // Reload on focus, so unread counts drop after reading a conversation, and
+  // the moment anything changes.
+  useFocusEffect(load);
+  useLive(load);
 
   const [latest, ...earlier] = matches ?? [];
   return (

@@ -35,6 +35,8 @@ interface Session {
   deleteAccount(): Promise<void>;
   /** A word for the welcome screen after signing out, e.g. that the account was deleted. */
   notice: string | null;
+  /** The session token, for the live connection; null when signed out. */
+  token(): string | null;
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -129,8 +131,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [api, forget]);
 
   const value = useMemo(
-    () => ({ status, account, api, signIn, signOut, refresh, deleteAccount, notice }),
-    [status, account, api, signIn, signOut, refresh, deleteAccount, notice],
+    () => ({ status, account, api, signIn, signOut, refresh, deleteAccount, notice, token: token.get }),
+    [status, account, api, signIn, signOut, refresh, deleteAccount, notice, token],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

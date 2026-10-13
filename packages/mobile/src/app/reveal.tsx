@@ -13,6 +13,7 @@ import { LockBadge, ProfilePhoto } from '@/components/Photo';
 import { Highlights, PromptCard, Quote, Reasons } from '@/components/Profile';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow } from '@/components/Text';
+import { useLive, useLiveConnected } from '@/live';
 import { NATIVE_DRIVER } from '@/motion';
 import { useSession } from '@/session';
 import { fonts, night, shadows } from '@/theme';
@@ -27,8 +28,9 @@ import { fonts, night, shadows } from '@/theme';
  */
 type Step = 'sealed' | 'opening' | 'deciding' | 'confirming-pass' | 'waiting' | 'meeting' | 'together' | 'passed';
 
-/** How often to look for the other person's hello while waiting here. */
+/** How often to look for the other person's hello while waiting here, without and with the live connection. */
 const WATCH_MS = 4000;
+const WATCH_LIVE_MS = 20_000;
 /** How long the "you both said hello" moment lasts before the chat opens. */
 const MEETING_MS = 2600;
 
@@ -42,11 +44,13 @@ function stepFor(match: Match): Step {
 /**
  * The one-match reveal: sealed until opened, then the other person's profile
  * and hello or pass. This round's match by default, or any match with
- * `?matchId=`.
+ * `?matchId=`; `&moment=mutual` opens on the moment both said hello (when it
+ * happened while this person was elsewhere in the app).
  */
 export default function Reveal() {
-  const { matchId: wanted } = useLocalSearchParams<{ matchId?: string }>();
+  const { matchId: wanted, moment } = useLocalSearchParams<{ matchId?: string; moment?: string }>();
   const { api } = useSession();
+  const live = useLiveConnected();
   const [match, setMatch] = useState<Match | null | undefined>(undefined);
   const [step, setStep] = useState<Step>('sealed');
   const [busy, setBusy] = useState(false);
@@ -59,11 +63,11 @@ export default function Reveal() {
     load.then(
       (found) => {
         setMatch(found);
-        if (found !== null) setStep(stepFor(found));
+        if (found !== null) setStep(moment === 'mutual' && found.mutual && !found.passed ? 'meeting' : stepFor(found));
       },
       (caught: unknown) => setError(describeError(caught)),
     );
-  }, [api, wanted]);
+  }, [api, wanted, moment]);
 
   const matchId = match?.matchId;
 
@@ -75,22 +79,29 @@ export default function Reveal() {
     return fresh;
   }, [api, matchId]);
 
-  // While waiting on their hello, look every few seconds; the moment it comes,
-  // celebrate and open the chat.
+  /** Fetch the match again and move on if it has changed: both said hello, or it ended. */
+  const check = useCallback(() => {
+    reload().then(
+      (fresh) => {
+        if (fresh?.passed) setStep('passed');
+        else if (fresh?.mutual) setStep((current) => (current === 'deciding' || current === 'confirming-pass' || current === 'waiting' ? 'meeting' : current));
+      },
+      () => undefined,
+    );
+  }, [reload]);
+
+  // Their hello arrives over the live connection the moment it happens.
+  useLive((event) => {
+    if ((event.type === 'mutual' || event.type === 'ended') && event.matchId === matchId) check();
+  });
+
+  // While waiting, also look now and then, in case the live connection is down.
   useFocusEffect(
     useCallback(() => {
       if (step !== 'waiting') return;
-      const timer = setInterval(() => {
-        reload().then(
-          (fresh) => {
-            if (fresh?.passed) setStep('passed');
-            else if (fresh?.mutual) setStep('meeting');
-          },
-          () => undefined,
-        );
-      }, WATCH_MS);
+      const timer = setInterval(check, live ? WATCH_LIVE_MS : WATCH_MS);
       return () => clearInterval(timer);
-    }, [step, reload]),
+    }, [step, check, live]),
   );
 
   if (match === null) return <Redirect href="/home" />;

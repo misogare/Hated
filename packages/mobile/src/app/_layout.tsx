@@ -6,12 +6,13 @@ import { Fraunces_400Regular_Italic } from '@expo-google-fonts/fraunces/400Regul
 import { Fraunces_500Medium } from '@expo-google-fonts/fraunces/500Medium';
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
+import { LiveProvider, useLive } from '@/live';
 import { SessionProvider, useSession } from '@/session';
 import { day } from '@/theme';
 
@@ -28,7 +29,7 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
-      {fontsLoaded ? <Routes /> : <View style={styles.blank} />}
+      <LiveProvider>{fontsLoaded ? <Routes /> : <View style={styles.blank} />}</LiveProvider>
     </SessionProvider>
   );
 }
@@ -63,30 +64,50 @@ function Routes() {
 
   const signedIn = status === 'signed-in';
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: day.bg } }}>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="how-it-works" />
-        <Stack.Screen name="sign-in/email" />
-        <Stack.Screen name="sign-in/code" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="start" />
-        <Stack.Screen name="onboarding/about" />
-        <Stack.Screen name="onboarding/questions" />
-        <Stack.Screen name="onboarding/hopes" />
-        <Stack.Screen name="onboarding/photos" />
-        <Stack.Screen name="onboarding/done" />
-        <Stack.Screen name="home" />
-        <Stack.Screen name="reveal" />
-        <Stack.Screen name="no-match" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="chat" />
-        <Stack.Screen name="matches" />
-        <Stack.Screen name="report" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {signedIn ? <LiveMoments /> : null}
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: day.bg } }}>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="how-it-works" />
+          <Stack.Screen name="sign-in/email" />
+          <Stack.Screen name="sign-in/code" />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="start" />
+          <Stack.Screen name="onboarding/about" />
+          <Stack.Screen name="onboarding/questions" />
+          <Stack.Screen name="onboarding/hopes" />
+          <Stack.Screen name="onboarding/photos" />
+          <Stack.Screen name="onboarding/done" />
+          <Stack.Screen name="home" />
+          <Stack.Screen name="reveal" />
+          <Stack.Screen name="no-match" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="chat" />
+          <Stack.Screen name="matches" />
+          <Stack.Screen name="report" />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
+}
+
+/**
+ * When the other person says hello back while this one is on home or their
+ * matches, take them to the moment (the circles meet, the photos unblur), which
+ * then opens the chat. Anywhere else, they aren't interrupted: home shows it
+ * when they come back, and a push may already have told them.
+ */
+function LiveMoments() {
+  const pathname = usePathname();
+  useLive((event) => {
+    if (event.type !== 'mutual') return;
+    if (pathname === '/home' || pathname === '/matches') {
+      router.push({ pathname: '/reveal', params: { matchId: event.matchId, moment: 'mutual' } });
+    }
+  });
+  return null;
 }
 
 const styles = StyleSheet.create({
