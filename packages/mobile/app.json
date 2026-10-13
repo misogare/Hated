@@ -45,7 +45,16 @@
           "backgroundColor": "#FBF3EE"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HateD opens your photo library so you can choose photos for your profile.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

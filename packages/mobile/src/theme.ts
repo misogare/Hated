@@ -40,6 +40,23 @@ export const night = {
   outline: '#8C6A78',
   blush: '#EBB3C1',
   ember: '#6B4026',
+  /** Warm light: candle glow behind the evening screens. */
+  glow: '#F7C66A',
+  peach: '#F2C4B3',
+  /** Wax for the reveal's seal, darker than honey. */
+  wax: '#C9822E',
+  waxDeep: '#8A4B14',
+} as const;
+
+/**
+ * Depth, as CSS-style box shadows (React Native draws them on iOS, Android and
+ * the web alike).
+ */
+export const shadows = {
+  card: '0px 18px 40px rgba(12, 3, 8, 0.32)',
+  honey: '0px 10px 30px rgba(240, 178, 86, 0.28)',
+  rose: '0px 10px 24px rgba(184, 58, 94, 0.28)',
+  glow: '0px 0px 60px rgba(240, 178, 86, 0.22)',
 } as const;
 
 /** Font family names as registered in the root layout. */

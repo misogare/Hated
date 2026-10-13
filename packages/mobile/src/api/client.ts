@@ -30,6 +30,13 @@ export function apiBaseUrl(): string {
   return Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 }
 
+/** What expo-image needs to fetch a photo: its address and this session's token. */
+export interface PhotoSource {
+  uri: string;
+  headers: Record<string, string>;
+  cacheKey: string;
+}
+
 export interface ApiClient {
   sendCode(email: string): Promise<Api.SendCodeResponse>;
   verifyCode(verificationId: string, code: string): Promise<Api.SessionResponse>;
@@ -64,6 +71,17 @@ export interface ApiClient {
   matches(): Promise<Api.MatchesResponse>;
   /** Report a match; this also ends it. */
   report(matchId: string, report: Api.ReportRequest): Promise<void>;
+  /** One match from any round, with the other person's profile. */
+  match(matchId: string): Promise<Api.MatchDetail>;
+  /** Add a photo from a local file (a JPEG, as the picker step leaves it). Returns every photo. */
+  uploadPhoto(uri: string): Promise<Api.PhotosResponse>;
+  deletePhoto(photoId: string): Promise<Api.PhotosResponse>;
+  /** Every photo id, main first. */
+  reorderPhotos(ids: string[]): Promise<Api.PhotosResponse>;
+  saveWords(words: Api.WordsRequest): Promise<Api.WordsResponse>;
+  prompts(): Promise<Api.PromptsResponse>;
+  /** Where to load a photo from. The API decides whether this person may see that version. */
+  photoSource(photoId: string, variant: Api.PhotoVariant): PhotoSource;
 }
 
 export interface ClientOptions {
@@ -76,16 +94,18 @@ export interface ClientOptions {
 export function createApiClient(options: ClientOptions): ApiClient {
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
     const token = options.token();
+    // A form (a photo upload) sets its own multipart Content-Type.
+    const form = body instanceof FormData;
     let response: Response;
     try {
       response = await fetch(`${options.baseUrl}${path}`, {
         method,
         headers: {
           Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(body === undefined || form ? {} : { 'Content-Type': 'application/json' }),
           ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : { body: form ? body : JSON.stringify(body) }),
       });
     } catch {
       throw new ApiError(0, 'network', null);
@@ -131,6 +151,26 @@ export function createApiClient(options: ClientOptions): ApiClient {
       call('POST', `/matches/${encodeURIComponent(matchId)}/messages`, { body } satisfies Api.SendMessageRequest),
     matches: () => call('GET', '/matches'),
     report: (matchId, report) => call('POST', `/matches/${encodeURIComponent(matchId)}/report`, report),
+    match: (matchId) => call('GET', `/matches/${encodeURIComponent(matchId)}`),
+    uploadPhoto: async (uri) => {
+      const form = new FormData();
+      if (Platform.OS === 'web') {
+        form.append('photo', await (await fetch(uri)).blob(), 'photo.jpg');
+      } else {
+        // React Native's FormData sends a local file given as { uri, name, type }.
+        form.append('photo', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+      }
+      return call('POST', '/me/photos', form);
+    },
+    deletePhoto: (photoId) => call('DELETE', `/me/photos/${encodeURIComponent(photoId)}`),
+    reorderPhotos: (ids) => call('PUT', '/me/photos/order', { ids } satisfies Api.PhotoOrderRequest),
+    saveWords: (words) => call('PUT', '/me/words', words),
+    prompts: () => call('GET', '/prompts'),
+    photoSource: (photoId, variant) => {
+      const token = options.token();
+      const headers: Record<string, string> = token === null ? {} : { Authorization: `Bearer ${token}` };
+      return { uri: `${options.baseUrl}/photos/${encodeURIComponent(photoId)}/${variant}`, headers, cacheKey: `${photoId}-${variant}` };
+    },
   };
 }
 
@@ -150,6 +190,9 @@ export function describeError(error: unknown): string {
       return 'The conversation opens once you have both said hello.';
     case 'passed':
       return 'This conversation has ended.';
+    case 'too-many':
+    case 'too-large':
+      return error.body?.problems?.join(' ') ?? 'That photo could not be added.';
     default:
       return 'Something went wrong. Please try again.';
   }

@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Glow } from '@/components/Glow';
 import { day, night, type Tone } from '@/theme';
 
 interface ScreenProps {
@@ -13,11 +14,14 @@ interface ScreenProps {
   footer?: ReactNode;
   children: ReactNode;
   style?: ViewStyle;
+  /** Candlelight from above, behind everything: for the evening screens. */
+  glow?: boolean;
 }
 
 /** A full screen in the day or night palette, padded clear of notches and keyboards. */
-export function Screen({ tone = 'day', scroll = false, footer, children, style }: ScreenProps) {
+export function Screen({ tone = 'day', scroll = false, footer, children, style, glow = false }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const background = tone === 'day' ? day.bg : night.bg;
   const body = [styles.body, style];
 
@@ -26,6 +30,7 @@ export function Screen({ tone = 'day', scroll = false, footer, children, style }
       style={[styles.root, { backgroundColor: background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {glow ? <Glow color={night.glow} opacity={0.2} width={width * 1.8} height={460} style={[styles.glow, { left: -width * 0.4 }]} /> : null}
       <StatusBar style={tone === 'day' ? 'dark' : 'light'} />
       <View style={{ height: insets.top + 12 }} />
       {scroll ? (
@@ -46,6 +51,7 @@ export function Screen({ tone = 'day', scroll = false, footer, children, style }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  glow: { position: 'absolute', top: -200 },
   fill: { flex: 1 },
   body: { flexGrow: 1, paddingHorizontal: 24 },
   footer: { paddingHorizontal: 24, paddingTop: 12, gap: 12 },
