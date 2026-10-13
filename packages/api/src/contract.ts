@@ -341,4 +341,6 @@ export type LiveEvent =
   | { type: 'mutual'; matchId: string }
   | { type: 'message'; matchId: string }
   | { type: 'ended'; matchId: string }
-  | { type: 'round'; roundId: string };
+  | { type: 'round'; roundId: string }
+  /** The other person is writing in this conversation. Lasts a few seconds unless repeated. */
+  | { type: 'typing'; matchId: string };

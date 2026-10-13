@@ -792,3 +792,25 @@ describe('the window to say hello', () => {
     expect(await res.json()).toEqual({ error: 'expired' });
   });
 });
+
+describe('typing', () => {
+  it('tells the other person, only in an open conversation, and not too often', async () => {
+    const seen: string[] = [];
+    const a = app({
+      announceTyping: async (_userId, matchId) => {
+        seen.push(matchId);
+        return matchId === 'open' ? { ok: true } : { ok: false, reason: 'not-mutual' };
+      },
+    });
+
+    expect((await a.request('/matches/open/typing', send('POST', undefined, bearer))).status).toBe(204);
+    expect((await a.request('/matches/closed/typing', send('POST', undefined, bearer))).status).toBe(403);
+    expect((await a.request('/matches/open/typing', send('POST'))).status).toBe(401);
+    expect(seen).toEqual(['open', 'closed']);
+
+    for (let i = 0; i < 58; i++) await a.request('/matches/open/typing', send('POST', undefined, bearer));
+    const limited = await a.request('/matches/open/typing', send('POST', undefined, bearer));
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ error: 'rate-limited' });
+  });
+});

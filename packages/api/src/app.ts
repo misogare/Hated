@@ -32,6 +32,7 @@ import type {
   SaveWordsResult,
   SendMessageResult,
   StartSignInResult,
+  TypingResult,
   VerifyCodeResult,
   WordsInput,
 } from '@hated/db';
@@ -66,6 +67,7 @@ export interface ApiServices {
   passMatch(userId: string, matchId: string): Promise<MatchActionResult>;
   listMessages(userId: string, matchId: string, after?: string): Promise<ListMessagesResult>;
   sendMessage(userId: string, matchId: string, body: string): Promise<SendMessageResult>;
+  announceTyping(userId: string, matchId: string): Promise<TypingResult>;
   listMatches(userId: string): Promise<MatchSummary[]>;
   reportMatch(userId: string, matchId: string, input: { reason: string; details?: string }): Promise<ReportResult>;
   registerPushToken(userId: string, token: string, platform: string): Promise<RegisterPushTokenResult>;
@@ -131,6 +133,8 @@ const VERIFY_CODE_LIMITS = [
 const EXPORT_LIMITS = [{ limit: 5, windowMs: 60 * 60_000 }];
 /** Per person: plenty for trying photos out, few enough to keep processing cheap. */
 const UPLOAD_LIMITS = [{ limit: 30, windowMs: 60 * 60_000 }];
+/** Per person: the app says it's typing at most every few seconds, so this is room to spare. */
+const TYPING_LIMITS = [{ limit: 60, windowMs: 60_000 }];
 /** An upload's size, with room for the form around it. The service checks the photo itself. */
 const MAX_UPLOAD_BODY = 15 * 1024 * 1024 + 64 * 1024;
 
@@ -184,6 +188,7 @@ export function createApp(options: ApiOptions): Hono<Env> {
   const verifyCodeLimiter = createRateLimiter(VERIFY_CODE_LIMITS, clock);
   const exportLimiter = createRateLimiter(EXPORT_LIMITS, clock);
   const uploadLimiter = createRateLimiter(UPLOAD_LIMITS, clock);
+  const typingLimiter = createRateLimiter(TYPING_LIMITS, clock);
   const app = new Hono<Env>();
 
   /** 429 with Retry-After when this caller (by IP, or by `key`) is over the limit, else null. */
@@ -538,6 +543,15 @@ export function createApp(options: ApiOptions): Hono<Env> {
     }
     if (result.reason === 'invalid') return c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
     return chatClosed(c, result.reason);
+  });
+
+  // "Typing…": a live event to the other person in an open conversation, nothing stored.
+  app.post('/matches/:matchId/typing', requireUser, async (c) => {
+    const userId = c.get('userId');
+    const tooMany = limited(c, typingLimiter, userId);
+    if (tooMany !== null) return tooMany;
+    const result = await services.announceTyping(userId, c.req.param('matchId'));
+    return result.ok ? c.body(null, 204) : chatClosed(c, result.reason);
   });
 
   return app;

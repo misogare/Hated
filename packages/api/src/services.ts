@@ -2,6 +2,7 @@
 
 import {
   addPhoto,
+  announceTyping,
   createSession,
   deleteAccount,
   deletePhoto,
@@ -70,6 +71,7 @@ export function createDbServices(
     passMatch: (userId, matchId) => passMatch(prisma, userId, matchId),
     listMessages: (userId, matchId, after) => listMessages(prisma, userId, matchId, { after }),
     sendMessage: (userId, matchId, body) => sendMessage(prisma, userId, matchId, body),
+    announceTyping: (userId, matchId) => announceTyping(prisma, userId, matchId),
     listMatches: (userId) => listMatches(prisma, userId, window),
     reportMatch: (userId, matchId, input) => reportMatch(prisma, userId, matchId, input),
     registerPushToken: (userId, token, platform) => registerPushToken(prisma, userId, token, platform),
