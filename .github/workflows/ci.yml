@@ -1,0 +1,73 @@
+name: CI
+
+# Every push to main and every pull request: typecheck, lint, every package's
+# tests (db's integration tests against a real Postgres), and the web demo end
+# to end in a browser. The demo is published only after this passes (pages.yml).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, lint and tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hated
+          POSTGRES_PASSWORD: hated
+          POSTGRES_DB: hated
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hated"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # The integration tests create and migrate this database themselves.
+      TEST_DATABASE_URL: postgresql://hated:hated@localhost:5432/hated_test?schema=public
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint -w @hated/mobile
+      - run: npm test
+
+  demo:
+    name: Web demo, end to end
+    runs-on: ubuntu-latest
+    env:
+      # Built and served under /<repo>/, as GitHub Pages serves it.
+      HATED_BASE_URL: /${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run demo:export -w @hated/mobile
+      - run: npx playwright install --with-deps chromium
+        working-directory: packages/mobile
+      - run: npm run test:e2e -w @hated/mobile
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            packages/mobile/playwright-report
+            packages/mobile/test-results
+          retention-days: 7

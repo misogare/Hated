@@ -1,6 +1,11 @@
 <h1 align="center">HateD</h1>
 
 <p align="center">
+  <a href="https://github.com/misogare/Hated/actions/workflows/ci.yml"><img src="https://github.com/misogare/Hated/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://misogare.github.io/Hated/"><img src="https://github.com/misogare/Hated/actions/workflows/pages.yml/badge.svg" alt="Web demo"></a>
+</p>
+
+<p align="center">
   <strong>For people who hate dating apps.</strong><br>
   No swiping and no feeds. One match a week, chosen by what you both actually care about.
 </p>
@@ -208,7 +213,13 @@ To check everything:
 npm test             # db's integration tests need TEST_DATABASE_URL in packages/db/.env
 npm run typecheck
 npm run lint -w @hated/mobile
+npm run demo:export -w @hated/mobile && npm run test:e2e -w @hated/mobile   # the demo in a browser
 ```
+
+The last line walks a visitor's first weeks through the demo, in Chromium
+(`npx playwright install chromium` in `packages/mobile` fetches it once). CI
+runs all of it on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## The demo
 
@@ -222,7 +233,7 @@ school-style address (one is filled in for you) and the one-time code
 `123456`: no email is sent, and your demo account stays in your browser.
 `npm run demo` serves it locally, with no API or database.
 
-Every push to `main` builds the demo and publishes it to GitHub Pages
+Every push to `main` that passes CI publishes the demo to GitHub Pages
 ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
 
 ## License

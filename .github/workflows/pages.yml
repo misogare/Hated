@@ -2,9 +2,12 @@ name: Web demo
 
 # The web demo on GitHub Pages: the app built with EXPO_PUBLIC_DEMO=1, so it runs
 # on made-up people entirely in the visitor's browser (packages/mobile/src/demo).
-# Published on every push to main. Settings → Pages → Source must be "GitHub Actions".
+# Published after CI passes on main (ci.yml tests the same build end to end), or
+# by hand. Settings → Pages → Source must be "GitHub Actions".
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -13,16 +16,26 @@ permissions:
   pages: write
   id-token: write
 
-# One deployment at a time. A run in progress finishes; newer pushes wait their turn.
+# One deployment at a time. A run in progress finishes; newer ones wait their turn.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
   build:
+    # Only a push to this repository's main that passed CI: a pull request from a
+    # fork's own "main" branch must never reach the deploy.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The commit CI tested, not whatever main is by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
