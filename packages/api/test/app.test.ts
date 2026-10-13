@@ -240,6 +240,7 @@ describe('GET /home', () => {
       getAccount: async () => ({ ...ACCOUNT, profile: { ...ACCOUNT.profile!, isActive: false } }),
       getLatestResult: async () => ({ status: 'none' }),
       listMatches: async () => [summary({ unread: 2 }), summary({ unread: 1 })],
+      feedbackDue: async () => ({ matchId: 'm0', partnerName: 'Maya' }),
     }).request('/home', { headers: bearer });
 
     expect(await res.json()).toEqual({
@@ -247,6 +248,7 @@ describe('GET /home', () => {
       isActive: false,
       result: { status: 'none' },
       unreadTotal: 3,
+      feedbackDue: { matchId: 'm0', partnerName: 'Maya' },
     });
   });
 });
@@ -812,5 +814,27 @@ describe('typing', () => {
     const limited = await a.request('/matches/open/typing', send('POST', undefined, bearer));
     expect(limited.status).toBe(429);
     expect(await limited.json()).toMatchObject({ error: 'rate-limited' });
+  });
+});
+
+describe('how a match went', () => {
+  it('records an answer, or a skip, for a match where both said hello', async () => {
+    const seen: unknown[] = [];
+    const a = app({
+      giveFeedback: async (_userId, matchId, answer) => {
+        seen.push(answer);
+        if (matchId === 'one-sided') return { ok: false, reason: 'not-mutual' };
+        if (matchId === 'theirs') return { ok: false, reason: 'not-found' };
+        return { ok: true };
+      },
+    });
+
+    expect((await a.request('/matches/m1/feedback', send('POST', { answer: 'well' }, bearer))).status).toBe(204);
+    expect((await a.request('/matches/m1/feedback', send('POST', { answer: null }, bearer))).status).toBe(204);
+    expect((await a.request('/matches/one-sided/feedback', send('POST', { answer: 'okay' }, bearer))).status).toBe(409);
+    expect((await a.request('/matches/theirs/feedback', send('POST', { answer: 'okay' }, bearer))).status).toBe(404);
+    expect((await a.request('/matches/m1/feedback', send('POST', { answer: 'amazing' }, bearer))).status).toBe(400);
+    expect((await a.request('/matches/m1/feedback', send('POST', {}, bearer))).status).toBe(400);
+    expect(seen).toEqual(['well', null, 'okay', 'okay']);
   });
 });

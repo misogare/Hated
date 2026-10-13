@@ -12,6 +12,9 @@ import type {
   AddPhotoResult,
   AnswerValue,
   DesireInput,
+  FeedbackAnswer,
+  FeedbackDue,
+  FeedbackResult,
   ListMessagesResult,
   MatchDetail,
   MatchSummary,
@@ -68,6 +71,8 @@ export interface ApiServices {
   listMessages(userId: string, matchId: string, after?: string): Promise<ListMessagesResult>;
   sendMessage(userId: string, matchId: string, body: string): Promise<SendMessageResult>;
   announceTyping(userId: string, matchId: string): Promise<TypingResult>;
+  feedbackDue(userId: string): Promise<FeedbackDue | null>;
+  giveFeedback(userId: string, matchId: string, answer: FeedbackAnswer | null): Promise<FeedbackResult>;
   listMatches(userId: string): Promise<MatchSummary[]>;
   reportMatch(userId: string, matchId: string, input: { reason: string; details?: string }): Promise<ReportResult>;
   registerPushToken(userId: string, token: string, platform: string): Promise<RegisterPushTokenResult>;
@@ -154,6 +159,7 @@ const ProfileBody = z.object({
 const ActiveBody = z.object({ active: z.boolean() });
 const SignOutBody = z.object({ everywhere: z.boolean().optional(), pushToken: z.string().max(300).optional() });
 const PushTokenBody = z.object({ token: z.string().max(300), platform: z.string().max(20) });
+const FeedbackBody = z.strictObject({ answer: z.enum(['well', 'okay', 'not-for-me']).nullable() });
 const NotificationsBody = z.strictObject({
   messages: z.boolean().optional(),
   hellos: z.boolean().optional(),
@@ -462,10 +468,11 @@ export function createApp(options: ApiOptions): Hono<Env> {
 
   app.get('/home', requireUser, async (c) => {
     const userId = c.get('userId');
-    const [account, result, matches] = await Promise.all([
+    const [account, result, matches, feedbackDue] = await Promise.all([
       services.getAccount(userId),
       services.getLatestResult(userId),
       services.listMatches(userId),
+      services.feedbackDue(userId),
     ]);
     if (account === null) return c.json<Api.ApiError>({ error: 'unauthorized' }, 401);
     return c.json<Api.Home>({
@@ -473,6 +480,7 @@ export function createApp(options: ApiOptions): Hono<Env> {
       isActive: account.profile?.isActive ?? false,
       result,
       unreadTotal: matches.reduce((total, match) => total + match.unread, 0),
+      feedbackDue,
     });
   });
 
@@ -543,6 +551,17 @@ export function createApp(options: ApiOptions): Hono<Env> {
     }
     if (result.reason === 'invalid') return c.json<Api.ApiError>({ error: 'invalid', problems: [result.problem] }, 422);
     return chatClosed(c, result.reason);
+  });
+
+  // "How did it go?": private to HateD, for a match where both said hello.
+  app.post('/matches/:matchId/feedback', requireUser, async (c) => {
+    const body = await readBody(c, FeedbackBody);
+    if (!body.ok) return body.response;
+    const result = await services.giveFeedback(c.get('userId'), c.req.param('matchId'), body.value.answer);
+    if (result.ok) return c.body(null, 204);
+    if (result.reason === 'not-found') return c.json<Api.ApiError>({ error: 'not-found' }, 404);
+    if (result.reason === 'not-mutual') return c.json<Api.ApiError>({ error: 'not-mutual' }, 409);
+    return c.json<Api.ApiError>({ error: 'invalid', problems: ['Choose how it went.'] }, 422);
   });
 
   // "Typing…": a live event to the other person in an open conversation, nothing stored.

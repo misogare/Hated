@@ -301,6 +301,16 @@ export interface Home {
   result: RoundResult;
   /** Unread messages across all their matches. */
   unreadTotal: number;
+  /** A past match to ask "how did it go?" about, once; null when there's none. */
+  feedbackDue: { matchId: string; partnerName: string } | null;
+}
+
+/** How a match went. Only HateD sees it, never the other person. */
+export type FeedbackAnswer = 'well' | 'okay' | 'not-for-me';
+
+/** `POST /matches/:id/feedback`. Null: they'd rather not say (which also means "don't ask again"). */
+export interface FeedbackRequest {
+  answer: FeedbackAnswer | null;
 }
 
 export interface HelloResponse {

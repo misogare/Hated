@@ -564,6 +564,7 @@ export function createDemoClient(options: ClientOptions): ApiClient {
         isActive: own.profile?.isActive ?? false,
         result,
         unreadTotal: own.matches.reduce((total, candidate) => total + unreadOf(candidate), 0),
+        feedbackDue: null,
       };
     },
 

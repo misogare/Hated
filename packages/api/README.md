@@ -56,7 +56,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `GET /questionnaire` | The active questionnaire, in order | |
 | `GET`/`PUT /me/answers` | Answers by question key; `null` skips | 409 `no-profile`, 422 `invalid` |
 | `GET`/`PUT /me/desires` | What they hope for per trait; weight 0 = don't mind | 409 `no-profile`, 422 `invalid` |
-| `GET /home` | Next round time, opt-in state, latest published result, unread total | |
+| `GET /home` | Next round time, opt-in state, latest published result, unread total, and a past match to ask "how did it go?" about (`feedbackDue`, or null) | |
 | `GET /matches` | Every match from published rounds, newest first, with main photo, last message and unread count | |
 | `GET /matches/:id` | One match from any published round: the other person's words, highlights and photos, why they fit, and openers | 404 `not-found` |
 | `POST /matches/:id/report` `{ reason, details? }` | Report for review; also ends the match like a pass | 422 `invalid`, 404 `not-found` |
@@ -65,6 +65,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `GET /matches/:id/messages?after=<id>` | The conversation, oldest first; with `after`, only newer messages (the app polls this) | 403 `not-mutual` until both said hello, 409 `passed`, 404 `not-found` |
 | `GET /live` (WebSocket) | Live updates while the app is open; see below | closes with 4001 if the session is refused |
 | `POST /matches/:id/messages` `{ body }` | Send a message (trimmed, 1–2000 characters) | 201 with the message; 422 `invalid`; 403 / 409 / 404 as above |
+| `POST /matches/:id/feedback` `{ answer }` | How the match went: `well`, `okay`, `not-for-me`, or `null` to skip. Private to HateD; `GET /home`'s `feedbackDue` says when to ask | 204; 409 `not-mutual`; 404 `not-found` |
 | `POST /matches/:id/typing` | Tell the other person you're writing (a live event; nothing is stored) | 204; 403 / 409 / 404 as above; 429 `rate-limited` past 60 a minute |
 
 Errors are always `{ error, problems?, attemptsRemaining?, retryAfterSeconds? }`;
