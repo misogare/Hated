@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { BackButton, Field, Notice } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
+import { DEMO } from '@/demo';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -18,7 +19,8 @@ const INSTITUTIONAL = /\.(edu|gov)(\.[a-z]{2})?$|\.ac\.[a-z]{2}$/;
 
 export default function SignInEmail() {
   const { api } = useSession();
-  const [email, setEmail] = useState('');
+  // The demo fills in an address, so trying it is one tap.
+  const [email, setEmail] = useState(DEMO ? 'you@demo.edu' : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +86,11 @@ export default function SignInEmail() {
         ) : looksPersonal ? (
           <Notice kind="error">That looks like a personal address. HateD needs an email from a school or government domain.</Notice>
         ) : (
-          <Notice kind="info">Works with addresses like .edu, .edu.au, .ac.uk and .gov from participating institutions.</Notice>
+          <Notice kind="info">
+            {DEMO
+              ? 'This is a demo: no email is sent, and any school-style address works.'
+              : 'Works with addresses like .edu, .edu.au, .ac.uk and .gov from participating institutions.'}
+          </Notice>
         )}
       </View>
     </Screen>

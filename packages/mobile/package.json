@@ -9,6 +9,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "demo": "node scripts/demo.mjs",
+    "demo:export": "node scripts/demo.mjs export",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },

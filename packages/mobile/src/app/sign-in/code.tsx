@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { BackButton, Notice } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { Body, Label, Title } from '@/components/Text';
+import { DEMO, DEMO_CODE } from '@/demo';
 import { useSession } from '@/session';
 import { day, fonts } from '@/theme';
 
@@ -66,6 +67,11 @@ export default function SignInCode() {
       <Body style={styles.lede}>
         We sent a 6-digit code to <Text style={styles.email}>{params.email}</Text>. It expires in 10 minutes.
       </Body>
+      {DEMO ? (
+        <View style={styles.demo}>
+          <Notice kind="info">This is a demo, so no email was sent. Your code is {DEMO_CODE}.</Notice>
+        </View>
+      ) : null}
 
       <View style={styles.form}>
         <Label>Verification code</Label>
@@ -121,6 +127,7 @@ const styles = StyleSheet.create({
   title: { marginTop: 24 },
   lede: { marginTop: 12 },
   email: { fontFamily: fonts.bodySemi, color: day.ink },
+  demo: { marginTop: 18 },
   form: { marginTop: 28, gap: 10 },
   code: {
     height: 72,

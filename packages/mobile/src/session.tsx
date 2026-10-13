@@ -8,6 +8,7 @@ import type { Account } from '@hated/api/contract';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { ApiError, apiBaseUrl, createApiClient, type ApiClient } from '@/api/client';
+import { DEMO, createDemoClient } from '@/demo';
 import { currentPushToken, forgetPushToken } from '@/notifications';
 import { clearToken, readToken, writeToken } from '@/storage';
 
@@ -69,7 +70,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo(
     () =>
-      createApiClient({
+      // The web demo answers from the browser instead of the API.
+      (DEMO ? createDemoClient : createApiClient)({
         baseUrl: apiBaseUrl(),
         token: token.get,
         // The server already says the session is gone, so only forget it here

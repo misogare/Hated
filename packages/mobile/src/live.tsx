@@ -15,6 +15,7 @@ import { createContext, useCallback, useContext, useEffect, useEffectEvent, useM
 import { AppState } from 'react-native';
 
 import { apiBaseUrl } from '@/api/client';
+import { DEMO, demo } from '@/demo';
 import { useSession } from '@/session';
 
 type Listener = (event: LiveEvent) => void;
@@ -43,6 +44,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status !== 'signed-in') return;
+    // The web demo's events happen in the browser, so there's no socket to open.
+    if (DEMO) {
+      return demo.subscribe((event) => {
+        for (const listener of listeners) listener(event);
+      });
+    }
     let socket: WebSocket | null = null;
     let stopped = false;
     let attempt = 0;
@@ -103,7 +110,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     },
     [listeners],
   );
-  const value = useMemo(() => ({ connected, subscribe }), [connected, subscribe]);
+  const value = useMemo(() => ({ connected: DEMO ? status === 'signed-in' : connected, subscribe }), [connected, status, subscribe]);
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 }
 

@@ -12,6 +12,7 @@ import { LockBadge, ProfilePhoto } from '@/components/Photo';
 import { Screen } from '@/components/Screen';
 import { Body, Eyebrow } from '@/components/Text';
 import { roundTime } from '@/copy';
+import { DEMO, demo } from '@/demo';
 import { useLive } from '@/live';
 import { registerForPush, useNotificationRouting } from '@/notifications';
 import { useSession } from '@/session';
@@ -83,6 +84,7 @@ export default function Home() {
       ) : (
         <>
           <Countdown nextRoundAt={home.nextRoundAt} />
+          {DEMO ? <SkipAhead to={roundTime(home.nextRoundAt)} /> : null}
 
           <View style={styles.card}>
             <View style={styles.statusRow}>
@@ -176,6 +178,26 @@ function Countdown({ nextRoundAt }: { nextRoundAt: string }) {
   );
 }
 
+/** The demo can't make anyone wait a week: run the next round now. */
+function SkipAhead({ to }: { to: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint="Demo only: runs the next round now instead of waiting for it"
+      disabled={busy}
+      onPress={() => {
+        setBusy(true);
+        void demo.skipToNextRound().finally(() => setBusy(false));
+      }}
+      style={({ pressed }) => [styles.skip, (pressed || busy) && styles.pressed]}
+    >
+      <Feather name="fast-forward" size={16} color={night.honey} />
+      <Text style={styles.skipText}>Demo: skip to {to}</Text>
+    </Pressable>
+  );
+}
+
 /** The latest published round, when there is one to act on. */
 function Result({ home }: { home: HomeData }) {
   const now = useNow(30_000);
@@ -256,6 +278,20 @@ const styles = StyleSheet.create({
   big: { marginTop: 10, fontFamily: fonts.display, fontSize: 52, lineHeight: 54, letterSpacing: -1, color: night.honey, fontVariant: ['tabular-nums'] },
   small: { marginTop: 2, fontFamily: fonts.display, fontSize: 25, lineHeight: 30, color: '#E9C99A', fontVariant: ['tabular-nums'] },
   when: { marginTop: 10, fontFamily: fonts.body, fontSize: 14.5, color: night.muted },
+  skip: {
+    marginTop: 18,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: night.outline,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  skipText: { fontFamily: fonts.bodySemi, fontSize: 14.5, color: night.honey },
   card: { marginTop: 22, padding: 18, borderRadius: 24, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, boxShadow: shadows.card },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },

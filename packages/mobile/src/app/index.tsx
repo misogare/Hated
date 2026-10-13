@@ -6,6 +6,7 @@ import { Notice, Wordmark } from '@/components/Controls';
 import { MeetingCircles } from '@/components/MeetingCircles';
 import { Screen } from '@/components/Screen';
 import { Body } from '@/components/Text';
+import { DEMO } from '@/demo';
 import { useSession } from '@/session';
 import { day, fonts, shadows } from '@/theme';
 
@@ -20,7 +21,9 @@ export default function Welcome() {
         <>
           <Button label="Get started" onPress={() => router.push('/how-it-works')} style={styles.primary} />
           <Button label="I already have an account" variant="secondary" onPress={() => router.push('/sign-in/email')} />
-          <Body style={styles.footnote}>Open to verified university and government emails.</Body>
+          <Body style={styles.footnote}>
+            {DEMO ? 'A demo with made-up people. Nothing you enter leaves this browser.' : 'Open to verified university and government emails.'}
+          </Body>
         </>
       }
     >

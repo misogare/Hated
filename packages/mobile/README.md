@@ -45,6 +45,7 @@ for quick layout checks; the phone is the real target.
 | `src/motion.ts` | The native-driver flag and `useReducedMotion`: nothing animates for someone who asked their device for less motion. |
 | `src/components/` | Screen, text, buttons, chips, fields and progress, plus the look's own pieces (see [Design](#design)). |
 | `src/copy.ts` | Slider phrases and labels per trait, the gender vocabulary, round-time formatting. |
+| `src/demo/` | The web demo's stand-in for the API: made-up people, their painted portraits and replies, all in the browser (see [The web demo](#the-web-demo)). |
 
 Onboarding has four steps (about you, the questions, what matters, photos and
 words) and resumes where it was left: `start` reads the account's onboarding
@@ -169,6 +170,29 @@ The API sends through Expo's push service and needs no keys of its own, unless
 the Expo project turns on enhanced push security; then set `EXPO_ACCESS_TOKEN`
 for the API (see `packages/api/README.md`). To test without the app, Expo's
 [push tool](https://expo.dev/notifications) sends to a token by hand.
+
+## The web demo
+
+Built with `EXPO_PUBLIC_DEMO=1`, the app runs without the API: `src/demo/`
+answers every call in the browser with the API's own shapes and errors, so the
+screens are the real ones. It has eight made-up people with painted portraits
+(never photos of real people), who play their part. Your first match says hello
+back a few seconds after you do, the next has already said it, and the one
+after never does, so you can watch a match close when its 24 hours run out.
+They answer in the chat, too. Rounds are weekly, so home gets a button that
+skips ahead to the next one, moving everything before it a week into the past.
+The account lives in this browser's storage only (`hated.demo`), and deleting
+it in settings clears it.
+
+```bash
+npm run demo                             # from the repo root: the demo on the dev server
+npm run demo:export -w @hated/mobile     # a static build in packages/mobile/dist
+```
+
+GitHub Pages publishes it from `.github/workflows/pages.yml` on every push to
+`main`. A project site lives under `/<repo>/`, so the build takes that path
+from `HATED_BASE_URL` (see `app.config.js`), and `404.html` is a copy of the
+app, so links into it survive a reload.
 
 ## Checks
 

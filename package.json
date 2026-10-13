@@ -22,7 +22,8 @@
     "verify-code": "npm run verify-code -w @hated/db --",
     "mail:check": "npm run mail:check -w @hated/db --",
     "api": "npm run dev -w @hated/api",
-    "mobile": "npm start -w @hated/mobile"
+    "mobile": "npm start -w @hated/mobile",
+    "demo": "npm run demo -w @hated/mobile"
   },
   "engines": {
     "node": ">=20.19"
