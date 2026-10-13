@@ -13,6 +13,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import { publishLive } from './live.js';
 import { findOwnMatch } from './results.js';
 
 /** Longest message accepted, in characters. */
@@ -103,6 +104,24 @@ export async function sendMessage(
     data: { matchId, senderId: access.profileId, body: text, createdAt: options.now ?? new Date() },
   });
   return { ok: true, message: view(row, access.profileId) };
+}
+
+export type TypingResult = { ok: true } | { ok: false; reason: ChatClosedReason };
+
+/**
+ * Tell the other person this one is writing to them: a live event to them
+ * alone, and nothing stored. The same rules as a message apply, so it only
+ * ever happens in an open conversation (both said hello, nobody passed).
+ */
+export async function announceTyping(prisma: PrismaClient, userId: string, matchId: string): Promise<TypingResult> {
+  const access = await openConversation(prisma, userId, matchId);
+  if (!access.ok) return access;
+  const match = await prisma.match.findUniqueOrThrow({
+    where: { id: matchId },
+    select: { profileA: { select: { userId: true } }, profileB: { select: { userId: true } } },
+  });
+  await publishLive(prisma, [access.isA ? match.profileB.userId : match.profileA.userId], { type: 'typing', matchId });
+  return { ok: true };
 }
 
 async function openConversation(

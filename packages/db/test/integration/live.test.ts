@@ -1,8 +1,10 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { announceTyping } from '../../src/chat.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { combineNotifiers, createLiveNotifier, listenLive, publishLive, type LiveEvent, type LiveListener } from '../../src/live.js';
 import type { Notifier } from '../../src/notify.js';
+import { passMatch, sayHello } from '../../src/results.js';
 import { seedDatabase } from '../../src/seed.js';
 import { TEST_DATABASE_URL, createTestClient, hasTestDatabase, resetDatabase } from './database.js';
 import { member, roundMatching } from './fixtures.js';
@@ -58,6 +60,25 @@ describe.skipIf(!hasTestDatabase)('live events through Postgres', () => {
       { type: 'ended', matchId: match.id },
     ]);
     for (const { to } of heard) expect(to.sort()).toEqual([sam.userId, maya.userId].sort());
+  });
+
+  it('tells only the other person that someone is typing, and only in an open conversation', async () => {
+    const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
+    const maya = await member(prisma, 'maya@vu.edu.au', 'Maya', 'woman', []);
+    const zara = await member(prisma, 'zara@vu.edu.au', 'Zara', 'woman', []);
+    const match = await roundMatching(prisma, sam.profileId, maya.profileId);
+
+    expect(await announceTyping(prisma, sam.userId, match.id)).toEqual({ ok: false, reason: 'not-mutual' });
+    expect(await announceTyping(prisma, zara.userId, match.id)).toEqual({ ok: false, reason: 'not-found' });
+    await sayHello(prisma, sam.userId, match.id);
+    await sayHello(prisma, maya.userId, match.id);
+
+    expect(await announceTyping(prisma, sam.userId, match.id)).toEqual({ ok: true });
+    await heardAtLeast(1);
+    expect(heard).toEqual([{ to: [maya.userId], event: { type: 'typing', matchId: match.id } }]);
+
+    await passMatch(prisma, maya.userId, match.id);
+    expect(await announceTyping(prisma, sam.userId, match.id)).toEqual({ ok: false, reason: 'passed' });
   });
 
   it('tells everyone in a round once it is published', async () => {

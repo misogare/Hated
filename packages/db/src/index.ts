@@ -194,12 +194,14 @@ export {
 
 export {
   MAX_MESSAGE_LENGTH,
+  announceTyping,
   listMessages,
   sendMessage,
   type ChatClosedReason,
   type ListMessagesResult,
   type MessageView,
   type SendMessageResult,
+  type TypingResult,
 } from './chat.js';
 
 export {
