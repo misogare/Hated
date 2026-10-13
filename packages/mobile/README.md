@@ -113,8 +113,8 @@ for display, with its italic for the moments that matter; Figtree for the rest.
 
 Settings holds the person's privacy choices:
 
-- **Notifications:** turn new messages, hellos or round results off, for every
-  device at once (on top of the phone's own settings).
+- **Notifications:** turn new messages, hellos, round results or reminders
+  off, for every device at once (on top of the phone's own settings).
 - **Take part in rounds:** off leaves them out of matching until they turn it
   back on; matches and conversations stay. It's the same switch as home's "Sit
   this round out".
@@ -131,7 +131,9 @@ Settings holds the person's privacy choices:
 Home asks for permission once (the system shows its prompt) and registers this
 device's Expo push token with the API. People then hear about a new message
 ("New message from Maya", never the text), the other person saying hello back,
-and a round's result. Tapping one opens that conversation, or home for a round.
+a round's result, and, if they haven't said hello, a reminder a few hours
+before the time to runs out. Tapping one opens that conversation, or home for a
+round or a reminder.
 A message in the conversation already on screen arrives quietly, without a
 banner. Signing out stops the device's notifications.
 

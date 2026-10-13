@@ -24,6 +24,7 @@ const NOTIFICATIONS: { kind: keyof NotificationPrefs; label: string; hint: strin
   { kind: 'messages', label: 'New messages', hint: "When someone you're talking to writes" },
   { kind: 'hellos', label: 'Hellos', hint: 'When your match says hello back' },
   { kind: 'rounds', label: 'Round results', hint: "When a round's matches are in" },
+  { kind: 'reminders', label: 'Reminders', hint: "Before the time to say hello runs out, if you haven't" },
 ];
 
 const ALL_ON: NotificationPrefs = { messages: true, hellos: true, rounds: true, reminders: true };

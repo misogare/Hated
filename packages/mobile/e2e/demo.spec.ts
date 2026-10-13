@@ -122,6 +122,7 @@ test("a visitor's first weeks", async ({ page }) => {
     await expect(page.getByText('Closed: the time to say hello ran out')).toBeVisible({ timeout: 30_000 });
     await page.goto('settings');
     await expect(page.getByText('Demo University')).toBeVisible();
+    await expect(page.getByRole('switch', { name: /^Reminders/ })).toBeChecked();
   });
 
   expect(errors).toEqual([]);
