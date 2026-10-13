@@ -65,6 +65,8 @@ interface DemoMatch {
   partnerSaidHello: boolean;
   passed: boolean;
   messages: Message[];
+  /** How the visitor said it went: an answer, null for "rather not say", absent if never asked. */
+  feedback?: Api.FeedbackAnswer | null;
 }
 
 interface Round {
@@ -264,6 +266,21 @@ function summarize(own: Account, match: DemoMatch): Api.MatchSummary {
     lastMessage: last === undefined ? null : { body: last.body, sentAt: last.sentAt, mine: last.mine },
     unread: unreadOf(match),
   };
+}
+
+/**
+ * The past match to ask "how did it go?" about, as the API picks it: the
+ * latest one where both said hello, once a newer round is out or a week has
+ * gone by, unless it ended or was already answered.
+ */
+function feedbackDueFor(own: Account): Api.Home['feedbackDue'] {
+  const latestRound = own.rounds.at(-1)?.id;
+  const past = [...own.matches]
+    .reverse()
+    .filter(mutualOf)
+    .find((match) => match.roundId !== latestRound || Date.now() - Date.parse(roundOf(own, match).publishedAt) >= WEEK_MS);
+  if (past === undefined || past.passed || past.feedback !== undefined) return null;
+  return { matchId: past.id, partnerName: personOf(past).displayName };
 }
 
 /** Rounds close on Sundays at 8 pm, in the visitor's own time zone. */
@@ -564,7 +581,7 @@ export function createDemoClient(options: ClientOptions): ApiClient {
         isActive: own.profile?.isActive ?? false,
         result,
         unreadTotal: own.matches.reduce((total, candidate) => total + unreadOf(candidate), 0),
-        feedbackDue: null,
+        feedbackDue: feedbackDueFor(own),
       };
     },
 
@@ -615,6 +632,14 @@ export function createDemoClient(options: ClientOptions): ApiClient {
       await pause();
       const own = signedIn();
       return { matches: [...own.matches].reverse().map((match) => summarize(own, match)) };
+    },
+
+    async feedback(matchId, answer) {
+      const { match } = await ownMatch(matchId);
+      if (!mutualOf(match)) fail(409, 'not-mutual');
+      if (answer !== null && !['well', 'okay', 'not-for-me'].includes(answer)) fail(422, 'invalid', { problems: ['Choose how it went.'] });
+      match.feedback = answer;
+      save();
     },
 
     async report(matchId, report) {

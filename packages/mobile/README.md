@@ -80,6 +80,10 @@ While the other person is writing, three dots say so (a live event, shown for a
 few seconds unless it's repeated); the app sends its own at most every 3 seconds
 while there's something in the box, and nothing about what's in it.
 
+A week after a match where both said hello (once the next round is out), home
+asks once how it went: really well, okay, or not for me, or skip. Only HateD
+sees the answer, never the other person.
+
 **Live updates** come over a WebSocket (`src/live.tsx`): home, the matches list,
 the reveal and the chat refresh the moment something changes for this person.
 If the other person says hello back while someone is on home or their matches,

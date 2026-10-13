@@ -98,15 +98,20 @@ test("a visitor's first weeks", async ({ page }) => {
     await expect(page.getByText("what's the last book you couldn't put down?", { exact: false })).toBeVisible();
   });
 
-  await test.step('next week, Theo has already said hello', async () => {
+  await test.step('next week, says how it went with Maya, and Theo has already said hello', async () => {
     await page.goto('home');
     await skipToRound(page);
+    await expect(page.getByText('How did it go with Maya?')).toBeVisible();
+    await button(page, 'Really well').click();
+    await expect(page.getByText('Thanks. That helps choose better matches.')).toBeVisible();
     await openMatch(page);
     await expect(page.getByText('Not sure how to start?')).toBeVisible();
   });
 
   await test.step('the week after, Inés never says hello, and the match closes', async () => {
     await page.goto('home');
+    await expect(page.getByText(/round closes in/)).toBeVisible();
+    await expect(page.getByText('How did it go with Maya?')).toHaveCount(0);
     await skipToRound(page);
     await openMatch(page);
     await expect(page.getByText(/Waiting for Inés · 23 h \d+ min left/).last()).toBeVisible();

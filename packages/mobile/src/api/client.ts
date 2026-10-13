@@ -71,6 +71,8 @@ export interface ApiClient {
   typing(matchId: string): Promise<void>;
   /** Every match from published rounds, newest first. */
   matches(): Promise<Api.MatchesResponse>;
+  /** How a match went (null: rather not say). Only HateD sees it. */
+  feedback(matchId: string, answer: Api.FeedbackAnswer | null): Promise<void>;
   /** Report a match; this also ends it. */
   report(matchId: string, report: Api.ReportRequest): Promise<void>;
   /** One match from any round, with the other person's profile. */
@@ -154,6 +156,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
     typing: (matchId) => call('POST', `/matches/${encodeURIComponent(matchId)}/typing`),
     matches: () => call('GET', '/matches'),
     report: (matchId, report) => call('POST', `/matches/${encodeURIComponent(matchId)}/report`, report),
+    feedback: (matchId, answer) =>
+      call('POST', `/matches/${encodeURIComponent(matchId)}/feedback`, { answer } satisfies Api.FeedbackRequest),
     match: (matchId) => call('GET', `/matches/${encodeURIComponent(matchId)}`),
     uploadPhoto: async (uri) => {
       const form = new FormData();

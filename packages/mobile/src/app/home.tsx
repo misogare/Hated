@@ -1,4 +1,4 @@
-import type { Home as HomeData, Match } from '@hated/api/contract';
+import type { FeedbackAnswer, Home as HomeData, Match } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -98,6 +98,7 @@ export default function Home() {
           </View>
 
           <Result home={home} />
+          {home.feedbackDue === null ? null : <Feedback key={home.feedbackDue.matchId} due={home.feedbackDue} />}
 
           <View style={styles.tiles}>
             <Pressable
@@ -260,6 +261,70 @@ function Result({ home }: { home: HomeData }) {
   );
 }
 
+const FEEDBACK: { answer: FeedbackAnswer; label: string }[] = [
+  { answer: 'well', label: 'Really well' },
+  { answer: 'okay', label: 'It was okay' },
+  { answer: 'not-for-me', label: 'Not for me' },
+];
+
+/** Once, about a past match: how did it go? Only HateD sees the answer. */
+function Feedback({ due }: { due: NonNullable<HomeData['feedbackDue']> }) {
+  const { api } = useSession();
+  const [done, setDone] = useState<'answered' | 'skipped' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(answer: FeedbackAnswer | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.feedback(due.matchId, answer);
+      setDone(answer === null ? 'skipped' : 'answered');
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done === 'skipped') return null;
+  return (
+    <View style={styles.feedback} accessibilityLiveRegion="polite">
+      {done === 'answered' ? (
+        <Text style={styles.feedbackThanks}>Thanks. That helps choose better matches.</Text>
+      ) : (
+        <>
+          <Text style={styles.feedbackTitle}>How did it go with {due.partnerName}?</Text>
+          <View style={styles.feedbackChoices}>
+            {FEEDBACK.map((choice) => (
+              <Pressable
+                key={choice.answer}
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void send(choice.answer)}
+                style={({ pressed }) => [styles.feedbackChoice, pressed && styles.pressed]}
+              >
+                <Text style={styles.feedbackChoiceText}>{choice.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.feedbackFoot}>
+            <Text style={styles.feedbackNote}>Only HateD sees this, never {due.partnerName}.</Text>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={() => void send(null)} style={({ pressed }) => pressed && styles.pressed}>
+              <Text style={styles.feedbackSkip}>Skip</Text>
+            </Pressable>
+          </View>
+          {error === null ? null : (
+            <Notice tone="night" kind="error">
+              {error}
+            </Notice>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
 function status(match: Match, now: number): string {
   if (match.mutual) return match.unread > 0 ? 'New messages' : 'You both said hello';
   if (match.expired) return 'The time to say hello is up';
@@ -323,5 +388,14 @@ const styles = StyleSheet.create({
   tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tileTitle: { fontFamily: fonts.bodySemi, fontSize: 15, color: night.text },
   pressed: { opacity: 0.75 },
+  feedback: { marginTop: 22, padding: 18, borderRadius: 24, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, gap: 12 },
+  feedbackTitle: { fontFamily: fonts.display, fontSize: 20, lineHeight: 25, color: night.text },
+  feedbackChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  feedbackChoice: { minHeight: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: night.outline, justifyContent: 'center' },
+  feedbackChoiceText: { fontFamily: fonts.bodySemi, fontSize: 14.5, color: night.text },
+  feedbackFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  feedbackNote: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: night.muted },
+  feedbackSkip: { fontFamily: fonts.bodySemi, fontSize: 14, color: night.honey, paddingVertical: 8 },
+  feedbackThanks: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: night.text },
   footnote: { marginTop: 26, marginBottom: 8, textAlign: 'center', fontSize: 13.5, lineHeight: 20 },
 });
