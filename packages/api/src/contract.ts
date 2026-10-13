@@ -79,8 +79,8 @@ export interface Account {
     highlights: string[];
   } | null;
   /** Main first. */
-  photos: Photo[];
-  /** `photos`: at least two photos, the last onboarding step. */
+  photos: OwnPhoto[];
+  /** `photos`: at least two photos that weren't rejected, the last onboarding step. */
   onboarding: { profile: boolean; answers: boolean; photos: boolean };
   /** Which push notifications they want. */
   notifications: NotificationPrefs;
@@ -126,11 +126,20 @@ export interface Photo {
   height: number;
 }
 
+/**
+ * One of the person's own photos, with where its review stands. Only an
+ * approved photo reaches a match; a pending one is waiting, and a rejected one
+ * stays theirs alone (they'll want to replace it).
+ */
+export interface OwnPhoto extends Photo {
+  review: 'pending' | 'approved' | 'rejected';
+}
+
 export type PhotoVariant = 'full' | 'blurred';
 
 /** The person's photos after a change, main first. */
 export interface PhotosResponse {
-  photos: Photo[];
+  photos: OwnPhoto[];
 }
 
 /** `PUT /me/photos/order`: every one of the person's photo ids, main first. */

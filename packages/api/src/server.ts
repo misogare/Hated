@@ -13,7 +13,9 @@
  * project requires one for sending push notifications; PHOTO_DIR for where
  * photos are kept (packages/db/data/photos); and HELLO_WINDOW_HOURS, how long
  * people have to say hello after a round (24; a fraction, e.g. 0.05 for three
- * minutes, is handy for trying it out).
+ * minutes, is handy for trying it out); PHOTO_REVIEW ("false" shows new photos
+ * to matches without a review); and ADMIN_PASSWORD, which turns on the admin
+ * page at /admin (at least 16 characters).
  *
  * Apps also keep a WebSocket open at /live for live updates (see
  * live-server.ts); the events reach it through Postgres, from this server, any
@@ -49,7 +51,7 @@ import { createApp } from './app.js';
 import { attachLiveServer } from './live-server.js';
 import { startRoundScheduler } from './round-scheduler.js';
 import { nextRoundAt, parseSchedule } from './schedule.js';
-import { createDbServices } from './services.js';
+import { createDbAdminServices, createDbServices } from './services.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 config({ path: [path.join(packageRoot, '.env'), path.join(packageRoot, '../db/.env')], quiet: true });
@@ -76,6 +78,10 @@ const helloWindowHours = Number(process.env.HELLO_WINDOW_HOURS?.trim() || '24');
 if (!Number.isFinite(helloWindowHours) || helloWindowHours <= 0) fail('HELLO_WINDOW_HOURS must be a number of hours above 0.');
 const helloWindowMs = Math.round(helloWindowHours * 3_600_000);
 
+const photoReview = (process.env.PHOTO_REVIEW ?? 'true').trim().toLowerCase() !== 'false';
+const adminPassword = process.env.ADMIN_PASSWORD?.trim() || undefined;
+if (adminPassword !== undefined && adminPassword.length < 16) fail('ADMIN_PASSWORD must be at least 16 characters.');
+
 /** Behind a proxy every request comes from the proxy, so read the forwarded address. */
 const trustProxy = (process.env.TRUST_PROXY ?? 'false').trim().toLowerCase() === 'true';
 
@@ -94,10 +100,12 @@ const notifier = combineNotifiers(
   }),
   createLiveNotifier(prisma, { log: (line) => console.error(`[live] ${line}`) }),
 );
-const services = createDbServices(prisma, createMailer(mailConfig), photos, { helloWindowMs });
+const services = createDbServices(prisma, createMailer(mailConfig), photos, { helloWindowMs, photoReview });
+const admin = adminPassword === undefined ? undefined : { services: createDbAdminServices(prisma, photos), password: adminPassword };
 const app = createApp({
   notifier,
   services,
+  admin,
   clientIp: (c) => {
     if (trustProxy) {
       const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
@@ -143,7 +151,8 @@ const hostname = process.env.HOST ?? '0.0.0.0';
 const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`HateD API on http://${hostname}:${info.port}`);
   console.log(`  mail     ${describeMailConfig(mailConfig)}`);
-  console.log(`  photos   ${photoDir}`);
+  console.log(`  photos   ${photoDir}, ${photoReview ? 'reviewed before a match sees them' : 'shown without a review (PHOTO_REVIEW=false)'}`);
+  console.log(`  admin    ${admin === undefined ? 'off (set ADMIN_PASSWORD to turn on /admin)' : `http://localhost:${port}/admin, user admin`}`);
   console.log(
     `  rounds   ${process.env.ROUND_DAY ?? 'SUN'} ${process.env.ROUND_TIME ?? '20:00'} ${schedule.timeZone}, ` +
       (autorun ? `run automatically; next ${nextRoundAt(new Date(), schedule).toISOString()}` : 'run by hand (ROUND_AUTORUN=false)'),

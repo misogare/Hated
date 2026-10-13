@@ -24,6 +24,8 @@ Node 20.19+ (Prisma 7).
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy, so per-IP limits read `X-Forwarded-For`. |
 | `EXPO_ACCESS_TOKEN` | (none) | Only if the Expo project has enhanced push security on. |
 | `PHOTO_DIR` | `packages/db/data/photos` | Where photo files are kept. Git ignores the default. |
+| `PHOTO_REVIEW` | `true` | New photos wait for a review before a match sees them. `false` shows them straight away (handy on your own machine). |
+| `ADMIN_PASSWORD` | (none) | Turns on the admin page at `/admin` (user `admin`); at least 16 characters. Off without it. |
 | `HELLO_WINDOW_HOURS` | `24` | How long people have to say hello after a round. A fraction (`0.05` is three minutes) is handy for trying it out. |
 
 With `MAIL_TRANSPORT=console`, sign-in codes are printed to the API's log
@@ -46,7 +48,7 @@ Everything except `/health`, `/auth/code` and `/auth/verify` needs
 | `PUT /me/notifications` `{ messages?, hellos?, rounds? }` | Turn each kind of push notification on or off, on every device; kinds left out stay as they are | 400 for anything else |
 | `PUT /me/profile` | Name, birthday, gender, who they're open to | 422 `invalid` with readable `problems` |
 | `PUT /me/active` `{ active }` | Sit out of, or rejoin, upcoming rounds | 409 `no-profile` |
-| `GET /me/photos` | Their photos, main first | |
+| `GET /me/photos` | Their photos, main first, each with its `review`: `pending`, `approved` or `rejected` | |
 | `POST /me/photos` (multipart, `photo`) | Add a photo (JPEG, PNG or WebP, up to 15 MB) | 201 with every photo; 422 `invalid` (not a photo, too small), 409 `too-many` (six at most), 413 `too-large`, 429 after 30 an hour |
 | `PUT /me/photos/order` `{ ids }` | Reorder them; the first is the main one | 422 `invalid` unless it lists each photo once |
 | `DELETE /me/photos/:id` | Remove one | 404 `not-found` |
@@ -86,6 +88,25 @@ same whether or not the other person has. The API checks about once a minute;
 each reminder is claimed in the database before it goes out, so it is sent once
 even with several servers. People can turn reminders off in settings
 (`reminders` in `PUT /me/notifications`).
+
+## The admin page
+
+With `ADMIN_PASSWORD` set, `/admin` is a small page for whoever runs HateD,
+behind HTTP Basic auth (user `admin`):
+
+- **Photos waiting for a review**, oldest first, each in full with Approve and
+  Reject. Only an approved photo reaches a match; until then, and for good if
+  it's rejected, it's its owner's alone, marked so in the app. Photos from
+  before reviews existed count as approved.
+- **Open reports**, with who reported whom, why, and how often that person has
+  been reported. A report has already ended the match; Resolved marks it read.
+- **Recent rounds**: how many people took part and were matched, and how the
+  matches went, from everyone's "how did it go?".
+
+It's plain HTML forms, no script. Everything people wrote is escaped, a post
+must come from the page itself (an `Origin` or `Sec-Fetch-Site` check), the
+page can't be framed and isn't cached, and the API's open CORS doesn't apply to
+it. Anywhere but your own machine, serve it over HTTPS.
 
 ## Live updates
 

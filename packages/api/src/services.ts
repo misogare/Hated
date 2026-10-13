@@ -18,13 +18,19 @@ import {
   listMatches,
   listPhotos,
   listMessages,
+  listPhotosToReview,
+  listRecentRounds,
+  listReports,
   passMatch,
   PROMPTS,
   readPhoto,
+  readPhotoForReview,
   registerPushToken,
   reorderPhotos,
   reportMatch,
+  resolveReport,
   resolveSession,
+  reviewPhoto,
   revokeAllSessions,
   revokeSession,
   unregisterAllPushTokens,
@@ -44,15 +50,21 @@ import {
   type PrismaClient,
 } from '@hated/db';
 
+import type { AdminServices } from './admin.js';
 import type { ApiServices } from './app.js';
 
 export function createDbServices(
   prisma: PrismaClient,
   mailer: Mailer,
   photos: PhotoStore,
-  /** How long people have to say hello after a round. Default 24 hours. */
-  window: { helloWindowMs?: number } = {},
+  options: {
+    /** How long people have to say hello after a round. Default 24 hours. */
+    helloWindowMs?: number;
+    /** New photos wait for a review before a match sees them. Default true. */
+    photoReview?: boolean;
+  } = {},
 ): ApiServices {
+  const window = { helloWindowMs: options.helloWindowMs };
   return {
     startSignIn: (email) => startSignIn(prisma, { email }, { mailer }),
     verifyCode: (input) => verifyCode(prisma, input),
@@ -85,12 +97,24 @@ export function createDbServices(
     deleteAccount: (userId) => deleteAccount(prisma, photos, userId),
     exportAccount: (userId) => exportAccount(prisma, photos, userId),
     listPhotos: (userId) => listPhotos(prisma, userId),
-    addPhoto: (userId, upload) => addPhoto(prisma, photos, userId, upload),
+    addPhoto: (userId, upload) => addPhoto(prisma, photos, userId, upload, { review: options.photoReview ?? true }),
     deletePhoto: (userId, photoId) => deletePhoto(prisma, photos, userId, photoId),
     reorderPhotos: (userId, ids) => reorderPhotos(prisma, userId, ids),
     readPhoto: (userId, photoId, variant) => readPhoto(prisma, photos, userId, photoId, variant),
     saveWords: (userId, input) => saveWords(prisma, userId, input),
     promptChoices: () => PROMPTS.map((prompt) => ({ key: prompt.key, label: prompt.label })),
     getMatch: (userId, matchId) => getMatch(prisma, userId, matchId, window),
+  };
+}
+
+/** What the admin page reads and does, straight from the database. */
+export function createDbAdminServices(prisma: PrismaClient, photos: PhotoStore): AdminServices {
+  return {
+    photosToReview: () => listPhotosToReview(prisma),
+    reviewPhoto: (photoId, decision) => reviewPhoto(prisma, photoId, decision),
+    photoForReview: (photoId) => readPhotoForReview(prisma, photos, photoId),
+    openReports: () => listReports(prisma),
+    resolveReport: (reportId) => resolveReport(prisma, reportId),
+    recentRounds: () => listRecentRounds(prisma),
   };
 }

@@ -23,7 +23,7 @@ import type {
   NewSession,
   NotificationPrefs,
   PhotoVariant,
-  PhotoView,
+  OwnPhotoView,
   ProfileInput,
   RegisterPushTokenResult,
   ReorderPhotosResult,
@@ -43,9 +43,11 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 
 import type * as Api from './contract.js';
+import { createAdmin, type AdminOptions } from './admin.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { nextRoundAt, type RoundSchedule } from './schedule.js';
 
@@ -84,7 +86,7 @@ export interface ApiServices {
   deleteAccount(userId: string): Promise<boolean>;
   /** Everything about the account, or null if there is no such account. */
   exportAccount(userId: string): Promise<AccountExport | null>;
-  listPhotos(userId: string): Promise<PhotoView[]>;
+  listPhotos(userId: string): Promise<OwnPhotoView[]>;
   addPhoto(userId: string, upload: Buffer): Promise<AddPhotoResult>;
   /** False if it isn't theirs. */
   deletePhoto(userId: string, photoId: string): Promise<boolean>;
@@ -109,6 +111,8 @@ export interface ApiOptions {
    * shares a single bucket.
    */
   clientIp?: (c: Context) => string;
+  /** The admin page at /admin (photos to review, reports, rounds). Default: none, and /admin is a 404. */
+  admin?: AdminOptions;
   /** Sends push notifications for messages and mutual hellos. Default: none. */
   notifier?: Notifier;
 }
@@ -207,9 +211,14 @@ export function createApp(options: ApiOptions): Hono<Env> {
   }
 
   // Sessions are bearer tokens, never cookies, so any origin may call (Expo web in dev).
-  app.use('*', cors());
+  // Not the admin page: that's for a browser on this origin alone.
+  const anyOrigin = cors();
+  app.use('*', (c, next) => (c.req.path === '/admin' || c.req.path.startsWith('/admin/') ? next() : anyOrigin(c, next)));
+  if (options.admin !== undefined) app.route('/admin', createAdmin(options.admin));
 
   app.onError((error, c) => {
+    // A refusal on purpose (the admin page's password or its same-origin check) keeps its own answer.
+    if (error instanceof HTTPException) return error.getResponse();
     console.error(error);
     return c.json<Api.ApiError>({ error: 'internal' }, 500);
   });

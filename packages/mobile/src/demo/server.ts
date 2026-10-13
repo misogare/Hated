@@ -30,6 +30,8 @@ const HELLO_WINDOW_MS = DAY_MS;
 /** How long a match who says hello back takes to do it. */
 const HELLO_BACK_MS = 4500;
 const MAX_PHOTOS = 6;
+/** How long a photo the visitor adds "waits for a review" before it's approved. */
+const REVIEW_MS = 10_000;
 const MAX_TRIES = 5;
 
 /**
@@ -46,6 +48,8 @@ interface OwnPhoto {
   height: number;
   full: string;
   blurred: string;
+  /** When the visitor added it (none for the painted ones they start with). */
+  addedAt?: string;
 }
 
 interface Message {
@@ -172,6 +176,11 @@ function ageOn(birthDate: string, now = new Date()): number {
   return now.getFullYear() - year - (before ? 1 : 0);
 }
 
+/** The demo's reviewer approves every photo, after a moment. */
+function reviewOf(photo: OwnPhoto): Api.OwnPhoto['review'] {
+  return photo.addedAt !== undefined && Date.now() - Date.parse(photo.addedAt) < REVIEW_MS ? 'pending' : 'approved';
+}
+
 function viewAccount(own: Account): Api.Account {
   return {
     userId: 'demo',
@@ -188,7 +197,7 @@ function viewAccount(own: Account): Api.Account {
             prompts: labelled(own.prompts),
             highlights: describePerson(traitsOf(own.answers), weekendOf(own.answers)),
           },
-    photos: own.photos.map(({ id, width, height }) => ({ id, width, height })),
+    photos: own.photos.map((photo) => ({ id: photo.id, width: photo.width, height: photo.height, review: reviewOf(photo) })),
     onboarding: { profile: own.profile !== null, answers: Object.keys(own.answers).length > 0, photos: own.photos.length >= 2 },
     notifications: { ...own.notifications },
   };
@@ -660,7 +669,7 @@ export function createDemoClient(options: ClientOptions): ApiClient {
       const own = signedIn();
       if (own.photos.length >= MAX_PHOTOS) fail(422, 'too-many', { problems: [`You can have up to ${MAX_PHOTOS} photos.`] });
       const kept = await keepPhoto(uri).catch(() => fail(422, 'invalid', { problems: ["That file couldn't be read as a photo."] }));
-      own.photos.push({ id: nextId('photo'), ...kept });
+      own.photos.push({ id: nextId('photo'), ...kept, addedAt: new Date().toISOString() });
       save();
       return { photos: viewAccount(own).photos };
     },
