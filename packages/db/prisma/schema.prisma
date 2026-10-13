@@ -158,6 +158,7 @@ model Profile {
   photos            Photo[]
   prompts           ProfilePrompt[]
   helloReminders    HelloReminder[]
+  matchFeedback     MatchFeedback[]
 
   @@index([genderId])
   @@index([isActive])
@@ -406,6 +407,7 @@ model Match {
   messages  Message[]
   reports   Report[]
   reminders HelloReminder[]
+  feedback  MatchFeedback[]
 
   @@unique([roundId, profileAId])
   @@unique([roundId, profileBId])
@@ -517,4 +519,22 @@ model HelloReminder {
   @@id([matchId, profileId])
   @@index([profileId])
   @@map("hello_reminders")
+}
+
+/// How a match went, for one of the two people: "well", "okay" or
+/// "not-for-me", or null when they'd rather not say. Asked once, about a match
+/// where both said hello, after the next round; only HateD ever sees it, as a
+/// signal for tuning the matching.
+model MatchFeedback {
+  matchId   String
+  profileId String
+  answer    String?
+  createdAt DateTime @default(now())
+
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, profileId])
+  @@index([profileId])
+  @@map("match_feedback")
 }

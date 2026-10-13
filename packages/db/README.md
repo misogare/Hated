@@ -473,6 +473,16 @@ without reminding anyone twice; the API runs it about once a minute. The push
 reads the same whether or not the other person has said hello, and people can
 turn reminders off (`notifyReminders`).
 
+## How a match went
+
+After a match where both said hello, `feedbackDue` says when to ask how it
+went: once a newer round they were in is out, or a week has gone by, and only
+about their latest such match, unless it ended. `giveFeedback` records "well",
+"okay" or "not-for-me", or null for "rather not say", in `match_feedback`; only
+HateD sees it, never the other person. It doesn't change the matching yet:
+`round:inspect` (and `getRoundReport`'s `feedback`) tallies each round's
+answers as data for tuning it, and the data export includes the person's own.
+
 ## Live events
 
 `createLiveNotifier` announces the moments the push notifier pushes (and a match

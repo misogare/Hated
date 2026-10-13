@@ -71,6 +71,8 @@ export interface AccountExport {
     conversationOpened: boolean;
     /** They passed on or reported this match. */
     youEndedIt: boolean;
+    /** How they said it went: "well", "okay" or "not-for-me"; "rather not say" if they skipped; null if never asked. */
+    howItWent: string | null;
     messagesYouSent: Array<{ sentAt: string; body: string }>;
   }>;
   reportsYouMade: Array<{ matchId: string | null; reason: string; details: string | null; madeAt: string; reviewed: boolean }>;
@@ -130,6 +132,7 @@ export async function exportAccount(
             round: { select: { startedAt: true, completedAt: true } },
             messages: { where: { senderId: profile.id }, orderBy: { createdAt: 'asc' } },
             reminders: { where: { profileId: profile.id }, select: { sentAt: true } },
+            feedback: { where: { profileId: profile.id }, select: { answer: true } },
           },
           orderBy: { round: { startedAt: 'asc' } },
         });
@@ -205,6 +208,7 @@ export async function exportAccount(
         remindedAt: isoOrNull(match.reminders[0]?.sentAt ?? null),
         conversationOpened: mine !== null && theirs !== null,
         youEndedIt: blocked.has(isA ? match.profileBId : match.profileAId),
+        howItWent: match.feedback.length === 0 ? null : (match.feedback[0]?.answer ?? 'rather not say'),
         messagesYouSent: match.messages.map((message) => ({ sentAt: iso(message.createdAt), body: message.body })),
       };
     }),

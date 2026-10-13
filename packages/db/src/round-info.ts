@@ -74,6 +74,8 @@ export interface RoundReport {
   completedAt: Date | null;
   participants: RoundReportParticipant[];
   matches: RoundReportMatch[];
+  /** How the round's matches went, from everyone's answers (see feedback.ts). */
+  feedback: { well: number; okay: number; notForMe: number; skipped: number };
 }
 
 /** Load a round report, or `null` if no round has that id. */
@@ -92,6 +94,7 @@ export async function getRoundReport(
         include: {
           profileA: { select: { displayName: true } },
           profileB: { select: { displayName: true } },
+          feedback: { select: { answer: true } },
         },
         orderBy: { profileAId: 'asc' },
       },
@@ -100,6 +103,8 @@ export async function getRoundReport(
 
   if (round === null) return null;
 
+  const answers = round.matches.flatMap((match) => match.feedback.map((feedback) => feedback.answer));
+  const count = (answer: string | null) => answers.filter((given) => given === answer).length;
   return {
     id: round.id,
     status: round.status,
@@ -130,5 +135,6 @@ export async function getRoundReport(
       scoreAB: match.scoreAB,
       scoreBA: match.scoreBA,
     })),
+    feedback: { well: count('well'), okay: count('okay'), notForMe: count('not-for-me'), skipped: count(null) },
   };
 }

@@ -99,7 +99,7 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
     const [maya, zara] = data?.matches ?? [];
     expect(maya).toMatchObject({ matchId: withMaya.id, conversationOpened: true, youEndedIt: false });
     expect(maya?.messagesYouSent.map((message) => message.body)).toEqual(['Hi Maya!']);
-    expect(zara).toMatchObject({ matchId: withZara.id, youSaidHelloAt: null, remindedAt: null, conversationOpened: false, youEndedIt: true });
+    expect(zara).toMatchObject({ matchId: withZara.id, youSaidHelloAt: null, remindedAt: null, conversationOpened: false, youEndedIt: true, howItWent: null });
   });
 
   it("leaves out other people's data and every secret", async () => {

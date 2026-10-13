@@ -58,11 +58,17 @@ const ROW: Row = {
       scoreBA: 0.8,
       profileA: { displayName: 'Mia' },
       profileB: { displayName: 'Wren' },
+      feedback: [{ answer: 'well' }, { answer: null }],
     },
   ],
 };
 
 describe('getRoundReport', () => {
+  it("tallies how the round's matches went", async () => {
+    const report = (await getRoundReport(client(ROW), 'round-1'))!;
+    expect(report.feedback).toEqual({ well: 1, okay: 0, notForMe: 0, skipped: 1 });
+  });
+
   it('returns null for an unknown round id', async () => {
     expect(await getRoundReport(client(null), 'nope')).toBeNull();
   });

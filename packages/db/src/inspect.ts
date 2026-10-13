@@ -186,6 +186,11 @@ function printReport(report: RoundReport): void {
         ].join(''),
     );
   }
+  const { feedback } = report;
+  console.log('');
+  console.log(
+    `  How it went: ${feedback.well} really well, ${feedback.okay} okay, ${feedback.notForMe} not for me, ${feedback.skipped} rather not say`,
+  );
   console.log('');
 }
 

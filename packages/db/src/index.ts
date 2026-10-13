@@ -135,6 +135,15 @@ export { HELLO_WINDOW_MS, helloDeadline, helloExpired, reminderLeadMs, type Hell
 
 export { sendHelloReminders } from './hello-reminders.js';
 
+export {
+  FEEDBACK_ANSWERS,
+  feedbackDue,
+  giveFeedback,
+  type FeedbackAnswer,
+  type FeedbackDue,
+  type FeedbackResult,
+} from './feedback.js';
+
 export { createDiskPhotoStore, createMemoryPhotoStore, defaultPhotoDir, type PhotoStore } from './photo-store.js';
 
 export { MAX_UPLOAD_BYTES, MIN_PHOTO_SIDE, processPhoto, type ProcessPhotoResult, type ProcessedPhoto } from './photo-processing.js';
