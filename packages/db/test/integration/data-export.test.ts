@@ -69,7 +69,7 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
       format: 'hated-export',
       version: 1,
       exportedAt: NOW.toISOString(),
-      account: { email: 'sam@vu.edu.au', emailVerified: true, notifications: { messages: true, hellos: true, rounds: false } },
+      account: { email: 'sam@vu.edu.au', emailVerified: true, notifications: { messages: true, hellos: true, rounds: false, reminders: true } },
       emailVerifications: [{ email: 'sam@vu.edu.au', institution: 'Victoria University', status: 'VERIFIED' }],
       profile: {
         displayName: 'Sam',
@@ -99,7 +99,7 @@ describe.skipIf(!hasTestDatabase)('exporting an account (Postgres)', () => {
     const [maya, zara] = data?.matches ?? [];
     expect(maya).toMatchObject({ matchId: withMaya.id, conversationOpened: true, youEndedIt: false });
     expect(maya?.messagesYouSent.map((message) => message.body)).toEqual(['Hi Maya!']);
-    expect(zara).toMatchObject({ matchId: withZara.id, youSaidHelloAt: null, conversationOpened: false, youEndedIt: true });
+    expect(zara).toMatchObject({ matchId: withZara.id, youSaidHelloAt: null, remindedAt: null, conversationOpened: false, youEndedIt: true });
   });
 
   it("leaves out other people's data and every secret", async () => {

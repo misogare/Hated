@@ -6,9 +6,9 @@
 
 import type { PrismaClient } from './generated/prisma/client.js';
 
-export type NotificationKind = 'messages' | 'hellos' | 'rounds';
+export type NotificationKind = 'messages' | 'hellos' | 'rounds' | 'reminders';
 
-export const NOTIFICATION_KINDS: readonly NotificationKind[] = ['messages', 'hellos', 'rounds'];
+export const NOTIFICATION_KINDS: readonly NotificationKind[] = ['messages', 'hellos', 'rounds', 'reminders'];
 
 export type NotificationPrefs = Record<NotificationKind, boolean>;
 
@@ -17,12 +17,13 @@ export const NOTIFY_COLUMN = {
   messages: 'notifyMessages',
   hellos: 'notifyHellos',
   rounds: 'notifyRounds',
+  reminders: 'notifyReminders',
 } as const satisfies Record<NotificationKind, string>;
 
-const SELECT = { notifyMessages: true, notifyHellos: true, notifyRounds: true } as const;
+const SELECT = { notifyMessages: true, notifyHellos: true, notifyRounds: true, notifyReminders: true } as const;
 
-function toPrefs(row: { notifyMessages: boolean; notifyHellos: boolean; notifyRounds: boolean }): NotificationPrefs {
-  return { messages: row.notifyMessages, hellos: row.notifyHellos, rounds: row.notifyRounds };
+export function toPrefs(row: { notifyMessages: boolean; notifyHellos: boolean; notifyRounds: boolean; notifyReminders: boolean }): NotificationPrefs {
+  return { messages: row.notifyMessages, hellos: row.notifyHellos, rounds: row.notifyRounds, reminders: row.notifyReminders };
 }
 
 /** The person's preferences, or null if there is no such account. */

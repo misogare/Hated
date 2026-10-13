@@ -465,6 +465,14 @@ over; one that became mutual in time stays open. Closing reads the same to both
 people, so whoever didn't say hello never learns whether the other did. The
 round's push says how long there is.
 
+`sendHelloReminders` reminds whoever hasn't said hello yet, once, when their
+match's window is nearly up (`reminderLeadMs`: 4 hours before it closes, or a
+quarter of a shorter window). It claims each reminder in `hello_reminders`
+before the push goes out, so it can run often and on several servers at once
+without reminding anyone twice; the API runs it about once a minute. The push
+reads the same whether or not the other person has said hello, and people can
+turn reminders off (`notifyReminders`).
+
 ## Live events
 
 `createLiveNotifier` announces the moments the push notifier pushes (and a match

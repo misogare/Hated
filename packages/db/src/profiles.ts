@@ -8,7 +8,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
-import type { NotificationPrefs } from './notification-prefs.js';
+import { toPrefs, type NotificationPrefs } from './notification-prefs.js';
 import { MIN_PHOTOS, type PhotoView } from './photos.js';
 import { profileCard } from './profile-card.js';
 import type { PromptAnswer } from './profile-words.js';
@@ -184,7 +184,7 @@ export async function getAccount(
       answers: (profile?.responses.length ?? 0) > 0,
       photos: (card?.photos.length ?? 0) >= MIN_PHOTOS,
     },
-    notifications: { messages: user.notifyMessages, hellos: user.notifyHellos, rounds: user.notifyRounds },
+    notifications: toPrefs(user),
   };
 }
 

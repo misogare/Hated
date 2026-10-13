@@ -12,6 +12,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
+import { toPrefs } from './notification-prefs.js';
 import type { PhotoStore } from './photo-store.js';
 import { photoKey } from './photos.js';
 import { toPromptAnswers } from './profile-words.js';
@@ -28,7 +29,7 @@ export interface AccountExport {
     email: string;
     emailVerified: boolean;
     createdAt: string;
-    notifications: { messages: boolean; hellos: boolean; rounds: boolean };
+    notifications: { messages: boolean; hellos: boolean; rounds: boolean; reminders: boolean };
   };
   emailVerifications: Array<{
     email: string;
@@ -64,6 +65,8 @@ export interface AccountExport {
     matchId: string;
     roundDate: string;
     youSaidHelloAt: string | null;
+    /** When HateD reminded them that the time to say hello was running out. */
+    remindedAt: string | null;
     /** Both said hello. */
     conversationOpened: boolean;
     /** They passed on or reported this match. */
@@ -126,6 +129,7 @@ export async function exportAccount(
           include: {
             round: { select: { startedAt: true, completedAt: true } },
             messages: { where: { senderId: profile.id }, orderBy: { createdAt: 'asc' } },
+            reminders: { where: { profileId: profile.id }, select: { sentAt: true } },
           },
           orderBy: { round: { startedAt: 'asc' } },
         });
@@ -150,7 +154,7 @@ export async function exportAccount(
       email: user.email,
       emailVerified: user.emailVerified,
       createdAt: iso(user.createdAt),
-      notifications: { messages: user.notifyMessages, hellos: user.notifyHellos, rounds: user.notifyRounds },
+      notifications: toPrefs(user),
     },
     emailVerifications: user.verifications.map((verification) => ({
       email: verification.email,
@@ -198,6 +202,7 @@ export async function exportAccount(
         matchId: match.id,
         roundDate: roundDate(match.round),
         youSaidHelloAt: isoOrNull(mine),
+        remindedAt: isoOrNull(match.reminders[0]?.sentAt ?? null),
         conversationOpened: mine !== null && theirs !== null,
         youEndedIt: blocked.has(isA ? match.profileBId : match.profileAId),
         messagesYouSent: match.messages.map((message) => ({ sentAt: iso(message.createdAt), body: message.body })),

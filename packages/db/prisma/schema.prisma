@@ -72,10 +72,12 @@ model User {
   updatedAt     DateTime @updatedAt
 
   /// Which push notifications the person wants: new messages, both saying
-  /// hello, and round results. On until they turn one off.
-  notifyMessages Boolean @default(true)
-  notifyHellos   Boolean @default(true)
-  notifyRounds   Boolean @default(true)
+  /// hello, round results, and a reminder before the time to say hello runs
+  /// out. On until they turn one off.
+  notifyMessages  Boolean @default(true)
+  notifyHellos    Boolean @default(true)
+  notifyRounds    Boolean @default(true)
+  notifyReminders Boolean @default(true)
 
   profile       Profile?
   verifications InstitutionVerification[]
@@ -155,6 +157,7 @@ model Profile {
   reportsAboutMe    Report[]                @relation("reported")
   photos            Photo[]
   prompts           ProfilePrompt[]
+  helloReminders    HelloReminder[]
 
   @@index([genderId])
   @@index([isActive])
@@ -397,11 +400,12 @@ model Match {
   readBAt    DateTime?
   createdAt  DateTime  @default(now())
 
-  round    MatchRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  profileA Profile    @relation("MatchSideA", fields: [profileAId], references: [id], onDelete: Cascade)
-  profileB Profile    @relation("MatchSideB", fields: [profileBId], references: [id], onDelete: Cascade)
-  messages Message[]
-  reports  Report[]
+  round     MatchRound      @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  profileA  Profile         @relation("MatchSideA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileB  Profile         @relation("MatchSideB", fields: [profileBId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  reports   Report[]
+  reminders HelloReminder[]
 
   @@unique([roundId, profileAId])
   @@unique([roundId, profileBId])
@@ -427,8 +431,8 @@ model Report {
   resolvedAt DateTime?
 
   reporter Profile? @relation("reporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  reported Profile @relation("reported", fields: [reportedId], references: [id], onDelete: Cascade)
-  match    Match?  @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  reported Profile  @relation("reported", fields: [reportedId], references: [id], onDelete: Cascade)
+  match    Match?   @relation(fields: [matchId], references: [id], onDelete: SetNull)
 
   @@index([resolvedAt])
   @@map("reports")
@@ -496,4 +500,21 @@ model InstitutionVerification {
   @@index([email, status])
   @@index([expiresAt])
   @@map("institution_verifications")
+}
+
+/// A reminder sent to someone who hadn't said hello yet, shortly before their
+/// match's window to say hello closed. One per person per match: claiming the
+/// row is what sends it, so a restart or a second API server never sends it
+/// twice.
+model HelloReminder {
+  matchId   String
+  profileId String
+  sentAt    DateTime @default(now())
+
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, profileId])
+  @@index([profileId])
+  @@map("hello_reminders")
 }

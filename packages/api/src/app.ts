@@ -111,6 +111,7 @@ const SILENT: Notifier = {
   becameMutual: async () => undefined,
   matchEnded: async () => undefined,
   roundPublished: async () => undefined,
+  helloReminder: async () => undefined,
 };
 
 /**

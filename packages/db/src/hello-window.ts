@@ -17,6 +17,14 @@ export interface HelloWindowOptions {
   helloWindowMs?: number;
 }
 
+/**
+ * How long before the window closes a reminder goes to whoever hasn't said
+ * hello: 4 hours, or a quarter of a shorter window (minutes, when trying it out).
+ */
+export function reminderLeadMs(windowMs: number = HELLO_WINDOW_MS): number {
+  return Math.min(4 * 60 * 60 * 1000, windowMs / 4);
+}
+
 /** When the hello window closes for a round's matches: its publication plus the window. */
 export function helloDeadline(round: { startedAt: Date; completedAt: Date | null }, windowMs: number = HELLO_WINDOW_MS): Date {
   return new Date((round.completedAt ?? round.startedAt).getTime() + windowMs);

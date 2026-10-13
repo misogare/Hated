@@ -80,6 +80,8 @@ export function createLiveNotifier(prisma: PrismaClient, options: { log?: Log } 
         log(`live: round ${roundId} not announced, ${error instanceof Error ? error.message : String(error)}`);
       }
     },
+    // A reminder changes nothing on screen, so open apps have nothing to hear.
+    helloReminder: async () => undefined,
   };
 }
 
@@ -168,6 +170,9 @@ export function combineNotifiers(...notifiers: Notifier[]): Notifier {
     },
     roundPublished: async (roundId) => {
       await Promise.all(notifiers.map((notifier) => notifier.roundPublished(roundId)));
+    },
+    helloReminder: async (matchId, userId) => {
+      await Promise.all(notifiers.map((notifier) => notifier.helloReminder(matchId, userId)));
     },
   };
 }

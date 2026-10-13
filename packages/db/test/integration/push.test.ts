@@ -70,15 +70,16 @@ describe.skipIf(!hasTestDatabase)('push notifications (Postgres)', () => {
   describe('preferences', () => {
     it('starts with everything on, and changes only the kinds given', async () => {
       const sam = await member(prisma, 'sam@vu.edu.au', 'Sam', 'woman', []);
-      expect((await getAccount(prisma, sam.userId))?.notifications).toEqual({ messages: true, hellos: true, rounds: true });
+      expect((await getAccount(prisma, sam.userId))?.notifications).toEqual({ messages: true, hellos: true, rounds: true, reminders: true });
 
-      expect(await setNotificationPrefs(prisma, sam.userId, { rounds: false })).toEqual({ messages: true, hellos: true, rounds: false });
+      expect(await setNotificationPrefs(prisma, sam.userId, { rounds: false })).toEqual({ messages: true, hellos: true, rounds: false, reminders: true });
       expect(await setNotificationPrefs(prisma, sam.userId, { messages: false, rounds: true })).toEqual({
         messages: false,
         hellos: true,
         rounds: true,
+        reminders: true,
       });
-      expect(await getNotificationPrefs(prisma, sam.userId)).toEqual({ messages: false, hellos: true, rounds: true });
+      expect(await getNotificationPrefs(prisma, sam.userId)).toEqual({ messages: false, hellos: true, rounds: true, reminders: true });
     });
 
     it('is null for an account that does not exist', async () => {
@@ -130,6 +131,32 @@ describe.skipIf(!hasTestDatabase)('push notifications (Postgres)', () => {
 
       expect(sent).toHaveLength(3);
       expect(new Set(sent.map((m) => m.title))).toEqual(new Set(['Your match is here']));
+    });
+
+    it('reminds someone that time is running out, without saying whether the other said hello', async () => {
+      const { sam, maya, match } = await pair();
+      await sayHello(prisma, maya.userId, match.id);
+      const { sent, sender } = fakeSender();
+
+      await createNotifier(prisma, sender).helloReminder(match.id, sam.userId);
+
+      expect(sent.map((m) => m.to).sort()).toEqual([TABLET, PHONE].sort());
+      expect(sent[0]).toMatchObject({
+        title: 'About 4 hours left to say hello',
+        body: "Your match closes if you don't both say hello in time.",
+        data: { type: 'round', matchId: match.id },
+      });
+      expect(JSON.stringify(sent)).not.toContain('Maya');
+
+      // A three-minute window, for trying it out, reminds in its last 45 seconds.
+      sent.length = 0;
+      await createNotifier(prisma, sender, { helloWindowMs: 3 * 60 * 1000 }).helloReminder(match.id, sam.userId);
+      expect(sent[0]?.title).toBe('About 1 minute left to say hello');
+
+      sent.length = 0;
+      await setNotificationPrefs(prisma, sam.userId, { reminders: false });
+      await createNotifier(prisma, sender).helloReminder(match.id, sam.userId);
+      expect(sent).toEqual([]);
     });
 
     it('sends nothing of a kind someone turned off, on any of their devices', async () => {

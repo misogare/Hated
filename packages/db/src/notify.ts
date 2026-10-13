@@ -6,6 +6,8 @@
  * - Both said hello: the person who said hello first hears the conversation
  *   is open. A one-sided hello is never announced, as in the app.
  * - A round published: everyone in it hears their result is in.
+ * - The time to say hello running out: whoever hasn't said hello yet hears
+ *   how long is left. Never whether the other person has.
  *
  * Every notification carries `data.type` (and `matchId` where there is one),
  * which the app uses to open the right screen when tapped. Delivery problems
@@ -15,7 +17,7 @@
  */
 
 import type { PrismaClient } from './generated/prisma/client.js';
-import { HELLO_WINDOW_MS } from './hello-window.js';
+import { HELLO_WINDOW_MS, reminderLeadMs } from './hello-window.js';
 import type { NotificationKind } from './notification-prefs.js';
 import type { PushMessage, PushSender } from './push-sender.js';
 import { pushTokensFor, removePushTokens } from './push-tokens.js';
@@ -29,6 +31,8 @@ export interface Notifier {
   matchEnded(matchId: string, userId: string): Promise<void>;
   /** Round `roundId` was just published. */
   roundPublished(roundId: string): Promise<void>;
+  /** `userId` hasn't said hello on `matchId`, and the time to is nearly up. */
+  helloReminder(matchId: string, userId: string): Promise<void>;
 }
 
 /** A notifier that does nothing: tests, and servers with push turned off. */
@@ -37,6 +41,7 @@ export const silentNotifier: Notifier = {
   becameMutual: async () => undefined,
   matchEnded: async () => undefined,
   roundPublished: async () => undefined,
+  helloReminder: async () => undefined,
 };
 
 export function createNotifier(
@@ -49,7 +54,9 @@ export function createNotifier(
   } = {},
 ): Notifier {
   const log = options.log ?? ((line: string) => console.error(line));
-  const window = describeWindow(options.helloWindowMs ?? HELLO_WINDOW_MS);
+  const windowMs = options.helloWindowMs ?? HELLO_WINDOW_MS;
+  const window = describeWindow(windowMs);
+  const lead = describeWindow(reminderLeadMs(windowMs));
 
   /** Send one notification to every device of each person who wants this kind; never throws. */
   async function deliver(
@@ -131,6 +138,13 @@ export function createNotifier(
             : { userId: participant.profile.userId, title: "This round's results are in", body: 'Open HateD to see how it went.', data: { type: 'round' } },
         ),
       );
+    },
+
+    // The same words whether or not the other person has said hello.
+    async helloReminder(matchId, userId) {
+      await deliver('reminders', [
+        { userId, title: `About ${lead} left to say hello`, body: "Your match closes if you don't both say hello in time.", data: { type: 'round', matchId } },
+      ]);
     },
   };
 }

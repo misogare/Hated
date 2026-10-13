@@ -131,7 +131,9 @@ export {
 
 export { deleteAccount } from './accounts.js';
 
-export { HELLO_WINDOW_MS, helloDeadline, helloExpired, type HelloWindowOptions } from './hello-window.js';
+export { HELLO_WINDOW_MS, helloDeadline, helloExpired, reminderLeadMs, type HelloWindowOptions } from './hello-window.js';
+
+export { sendHelloReminders } from './hello-reminders.js';
 
 export { createDiskPhotoStore, createMemoryPhotoStore, defaultPhotoDir, type PhotoStore } from './photo-store.js';
 
