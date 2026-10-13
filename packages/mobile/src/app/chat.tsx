@@ -1,12 +1,14 @@
-import type { ChatMessage, MatchSummary } from '@hated/api/contract';
+import type { ChatMessage, MatchDetail } from '@hated/api/contract';
 import Feather from '@expo/vector-icons/Feather';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ApiError, describeError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { BackButton, Notice } from '@/components/Controls';
+import { MeetingCircles } from '@/components/MeetingCircles';
+import { Avatar } from '@/components/Photo';
 import { Screen } from '@/components/Screen';
 import { Body, Title } from '@/components/Text';
 import { useOpenChat } from '@/notifications';
@@ -17,11 +19,11 @@ import { fonts, night } from '@/theme';
 const POLL_MS = 3000;
 const MAX_LENGTH = 2000;
 
-/** The conversation with this round's match, once both have said hello. */
+/** The conversation with a match, once both have said hello. */
 export default function Chat() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const { api } = useSession();
-  const [partner, setPartner] = useState<MatchSummary['partner'] | null>(null);
+  const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -41,12 +43,9 @@ export default function Chat() {
     });
   }, []);
 
-  // Any match, from this round or an earlier one.
+  // Who this is with (from any round), and openers for an empty conversation.
   useEffect(() => {
-    api.matches().then(
-      ({ matches }) => setPartner(matches.find((match) => match.matchId === matchId)?.partner ?? null),
-      () => undefined,
-    );
+    api.match(matchId).then(setDetail, () => undefined);
   }, [api, matchId]);
 
   const poll = useCallback(async () => {
@@ -89,12 +88,13 @@ export default function Chat() {
     }
   }
 
+  const partner = detail?.match.partner ?? null;
   const name = partner?.displayName ?? 'Your match';
   const newestFirst = messages === null ? [] : [...messages].reverse();
 
   if (closed !== null) {
     return (
-      <Screen tone="night" footer={<Button label="Back to home" tone="night" onPress={() => router.replace('/home')} />}>
+      <Screen tone="night" glow footer={<Button label="Back to home" tone="night" onPress={() => router.replace('/home')} />}>
         <BackButton tone="night" />
         <View style={styles.center}>
           <Title tone="night" style={styles.centerTitle}>
@@ -105,6 +105,7 @@ export default function Chat() {
     );
   }
 
+  const canSend = draft.trim().length > 0 && !sending;
   return (
     <Screen
       tone="night"
@@ -114,10 +115,10 @@ export default function Chat() {
           {error === null ? null : <Notice tone="night" kind="error">{error}</Notice>}
           <View style={styles.inputRow}>
             <TextInput
-              accessibilityLabel="Message"
+              accessibilityLabel={`Message to ${name}`}
               value={draft}
               onChangeText={setDraft}
-              placeholder="Write a message"
+              placeholder={partner === null ? 'Write a message' : `Write to ${partner.displayName}…`}
               placeholderTextColor={night.muted}
               selectionColor={night.honey}
               multiline
@@ -127,12 +128,12 @@ export default function Chat() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Send"
-              accessibilityState={{ disabled: draft.trim().length === 0 || sending }}
-              disabled={draft.trim().length === 0 || sending}
+              accessibilityState={{ disabled: !canSend }}
+              disabled={!canSend}
               onPress={() => void send()}
-              style={[styles.send, (draft.trim().length === 0 || sending) && styles.sendDisabled]}
+              style={[styles.send, !canSend && styles.sendDisabled]}
             >
-              {sending ? <ActivityIndicator color={night.bg} /> : <Feather name="send" size={20} color={night.bg} />}
+              {sending ? <ActivityIndicator color={night.bg} /> : <Feather name="arrow-up" size={21} color={night.bg} />}
             </Pressable>
           </View>
         </View>
@@ -140,15 +141,21 @@ export default function Chat() {
     >
       <View style={styles.header}>
         <BackButton tone="night" />
-        <View style={styles.monogram} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Text style={styles.monogramText}>{name.slice(0, 1).toUpperCase()}</Text>
-        </View>
-        <View style={styles.headerText}>
-          <Text style={styles.name} accessibilityRole="header">
+        <Avatar name={name} photo={partner?.photos[0] ?? null} unlocked={detail?.match.photosUnlocked ?? false} size={44} ring />
+        <Pressable
+          accessibilityRole="link"
+          accessibilityHint="Shows their profile"
+          disabled={detail === null}
+          onPress={() => router.push({ pathname: '/reveal', params: { matchId } })}
+          style={styles.headerText}
+        >
+          <Text style={styles.name} accessibilityRole="header" numberOfLines={1}>
             {partner === null ? name : `${partner.displayName}, ${partner.age}`}
           </Text>
-          <Text style={styles.subtitle}>{partner?.institution ? `Verified at ${partner.institution}` : 'Your match'}</Text>
-        </View>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle(detail)}
+          </Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Report ${name}`}
@@ -164,20 +171,34 @@ export default function Chat() {
           <ActivityIndicator color={night.honey} />
         </View>
       ) : messages.length === 0 ? (
-        <View style={styles.center}>
-          <Title tone="night" style={styles.centerTitle}>
-            You both said hello.
-          </Title>
-          <Body tone="night" style={styles.centerBody}>
-            Say something you would actually say in person.
-          </Body>
-        </View>
+        <ScrollView contentContainerStyle={styles.emptyScroll} keyboardShouldPersistTaps="handled">
+          <Text style={styles.pill}>You both said hello</Text>
+          <View style={styles.starter}>
+            <MeetingCircles size={34} />
+            <Text style={styles.starterTitle}>Not sure how to start?</Text>
+            <Body tone="night" style={styles.starterBody}>
+              A few openers from what you two have in common. Tap one to use it, or say something you'd actually say in person.
+            </Body>
+            {(detail?.match.openers ?? []).map((opener) => (
+              <Pressable
+                key={opener}
+                accessibilityRole="button"
+                accessibilityHint="Puts this in your message"
+                onPress={() => setDraft(opener)}
+                style={({ pressed }) => [styles.opener, pressed && styles.pressed]}
+              >
+                <Text style={styles.openerText}>{opener}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           inverted
           data={newestFirst}
           keyExtractor={(message) => message.id}
           contentContainerStyle={styles.list}
+          ListFooterComponent={<Text style={[styles.pill, styles.pillTop]}>You both said hello</Text>}
           renderItem={({ item, index }) => {
             // The list is newest first, so the next-older message sits at index + 1.
             const newer = index > 0 ? newestFirst[index - 1] : undefined;
@@ -188,6 +209,14 @@ export default function Chat() {
       )}
     </Screen>
   );
+}
+
+/** "Matched Sunday · Victoria University", from what is known so far. */
+function subtitle(detail: MatchDetail | null): string {
+  if (detail === null) return 'Your match';
+  const day = new Date(detail.publishedAt).toLocaleDateString(undefined, { weekday: 'long' });
+  const institution = detail.match.partner.institution;
+  return institution === null ? `Matched ${day}` : `Matched ${day} · ${institution}`;
 }
 
 function Bubble({ message, showTime }: { message: ChatMessage; showTime: boolean }) {
@@ -208,28 +237,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 24,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: night.line,
+    borderBottomColor: '#3F2534',
   },
-  monogram: { width: 44, height: 44, borderRadius: 22, backgroundColor: night.blush, alignItems: 'center', justifyContent: 'center' },
-  monogramText: { fontFamily: fonts.display, fontSize: 20, color: night.bg },
   headerText: { flex: 1, gap: 2 },
   more: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  name: { fontFamily: fonts.displayBold, fontSize: 19, color: night.text },
+  name: { fontFamily: fonts.display, fontSize: 20, lineHeight: 24, color: night.text },
   subtitle: { fontFamily: fonts.body, fontSize: 13, color: night.muted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
   centerTitle: { textAlign: 'center', fontSize: 28, lineHeight: 33 },
-  centerBody: { textAlign: 'center', fontSize: 15.5 },
+  emptyScroll: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 18, gap: 12 },
+  pill: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#34202C',
+    fontFamily: fonts.bodySemi,
+    fontSize: 12.5,
+    color: night.muted,
+    overflow: 'hidden',
+  },
+  pillTop: { marginBottom: 10 },
+  starter: { padding: 20, borderRadius: 26, backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, gap: 8 },
+  starterTitle: { marginTop: 8, fontFamily: fonts.display, fontSize: 22, lineHeight: 27, color: night.text },
+  starterBody: { fontSize: 14.5, lineHeight: 21 },
+  opener: { marginTop: 4, minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: night.outline },
+  openerText: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 20, color: night.text },
+  pressed: { opacity: 0.7 },
   list: { paddingHorizontal: 16, paddingVertical: 16, gap: 6 },
-  bubbleRow: { maxWidth: '82%', gap: 4 },
+  bubbleRow: { maxWidth: '80%', gap: 4 },
   mineRow: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   theirsRow: { alignSelf: 'flex-start', alignItems: 'flex-start' },
-  bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  bubble: { paddingHorizontal: 15, paddingVertical: 11, borderRadius: 20 },
   mine: { backgroundColor: night.honey, borderBottomRightRadius: 6 },
   theirs: { backgroundColor: night.surface, borderWidth: 1, borderColor: night.line, borderBottomLeftRadius: 6 },
-  bubbleText: { fontFamily: fonts.body, fontSize: 16, lineHeight: 22 },
+  bubbleText: { fontFamily: fonts.body, fontSize: 15.5, lineHeight: 22 },
   time: { fontFamily: fonts.body, fontSize: 11.5, color: night.muted, marginBottom: 6 },
   composer: { gap: 8 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
@@ -245,9 +290,9 @@ const styles = StyleSheet.create({
     paddingTop: 13,
     paddingBottom: 13,
     fontFamily: fonts.body,
-    fontSize: 16,
+    fontSize: 15.5,
     color: night.text,
   },
   send: { width: 48, height: 48, borderRadius: 24, backgroundColor: night.honey, alignItems: 'center', justifyContent: 'center' },
-  sendDisabled: { opacity: 0.45 },
+  sendDisabled: { opacity: 0.4 },
 });

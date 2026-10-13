@@ -1,12 +1,15 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Notice, Wordmark } from '@/components/Controls';
+import { MeetingCircles } from '@/components/MeetingCircles';
 import { Screen } from '@/components/Screen';
-import { Body, Title } from '@/components/Text';
+import { Body } from '@/components/Text';
 import { useSession } from '@/session';
-import { day, fonts } from '@/theme';
+import { day, fonts, shadows } from '@/theme';
+
+const STEPS = ['Answer a few honest questions', 'Meet one person, once a week', 'See their photos once you both say hello'];
 
 /** Welcome: what HateD is, for someone who hasn't signed in. */
 export default function Welcome() {
@@ -15,37 +18,63 @@ export default function Welcome() {
     <Screen
       footer={
         <>
-          <Button label="Get started" onPress={() => router.push('/how-it-works')} />
+          <Button label="Get started" onPress={() => router.push('/how-it-works')} style={styles.primary} />
           <Button label="I already have an account" variant="secondary" onPress={() => router.push('/sign-in/email')} />
-          <Body style={styles.footnote}>Open to verified school and government emails.</Body>
+          <Body style={styles.footnote}>Open to verified university and government emails.</Body>
         </>
       }
     >
-      <Wordmark />
+      <View style={styles.blob} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+      <View style={styles.header}>
+        <Wordmark />
+        <Pressable accessibilityRole="link" onPress={() => router.push('/sign-in/email')} style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}>
+          <Text style={styles.signInText}>Sign in</Text>
+        </Pressable>
+      </View>
       {notice === null ? null : (
         <View style={styles.notice}>
           <Notice kind="success">{notice}</Notice>
         </View>
       )}
-      <View style={styles.art} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <View style={[styles.circle, { left: 0, backgroundColor: day.peach }]} />
-        <View style={[styles.circle, { left: 90, backgroundColor: day.blush, opacity: 0.85 }]} />
-        <View style={styles.spark} />
+
+      <View style={styles.art}>
+        <MeetingCircles size={150} motion="drift" />
+        <View style={styles.ring} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       </View>
-      <Title style={styles.headline}>For people who hate dating apps.</Title>
-      <Body style={styles.lede}>
-        No swiping and no feeds. Each round you get one match, chosen by what you both actually care about.
-      </Body>
+
+      <Text accessibilityRole="header" style={styles.headline}>
+        For people who <Text style={styles.hate}>hate</Text> dating apps.
+      </Text>
+      <Body style={styles.lede}>No swiping and no feeds. One match a week, chosen by what you both actually care about.</Body>
+
+      <View style={styles.steps}>
+        {STEPS.map((step, index) => (
+          <View key={step} style={styles.step}>
+            <Text style={styles.stepNumber}>{index + 1}</Text>
+            <Text style={styles.stepText}>{step}</Text>
+          </View>
+        ))}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  notice: { marginTop: 16 },
-  art: { alignSelf: 'center', width: 246, height: 196, marginTop: 28 },
-  circle: { position: 'absolute', top: 20, width: 156, height: 156, borderRadius: 78 },
-  spark: { position: 'absolute', left: 112, top: 87, width: 22, height: 22, borderRadius: 11, backgroundColor: day.honey },
-  headline: { marginTop: 24, fontSize: 44, lineHeight: 46, letterSpacing: -0.9 },
-  lede: { marginTop: 16, fontSize: 17, lineHeight: 26 },
+  blob: { position: 'absolute', left: -150, top: -190, width: 420, height: 420, borderRadius: 210, backgroundColor: '#F7E3D8' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  signIn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4, borderRadius: 12 },
+  signInText: { fontFamily: fonts.bodySemi, fontSize: 15, color: day.accent },
+  pressed: { opacity: 0.7 },
+  notice: { marginTop: 12 },
+  art: { alignSelf: 'center', marginTop: 18, height: 170, justifyContent: 'center' },
+  ring: { position: 'absolute', right: -42, top: 0, width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderColor: day.ink, opacity: 0.16 },
+  headline: { marginTop: 18, fontFamily: fonts.display, fontSize: 44, lineHeight: 45, letterSpacing: -1.3, color: day.ink },
+  hate: { fontFamily: fonts.displayItalic, color: day.accent },
+  lede: { marginTop: 14, fontSize: 17, lineHeight: 25 },
+  steps: { marginTop: 20, gap: 10 },
+  step: { flexDirection: 'row', alignItems: 'baseline', gap: 14 },
+  stepNumber: { width: 18, fontFamily: fonts.displayItalic, fontSize: 18, color: '#A4561F' },
+  stepText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 15.5, lineHeight: 22, color: day.ink },
+  primary: { boxShadow: shadows.rose },
   footnote: { textAlign: 'center', fontSize: 13, fontFamily: fonts.body },
 });
