@@ -202,7 +202,15 @@ app, so links into it survive a reload.
 npm run typecheck -w @hated/mobile
 npm run lint -w @hated/mobile      # expo lint
 npx expo-doctor                   # from packages/mobile
+npm run demo:export -w @hated/mobile && npm run test:e2e -w @hated/mobile
 ```
+
+The last line tests the web demo end to end (`e2e/demo.spec.ts`): a visitor
+signs in, onboards, meets a match who says hello back, talks, and sees later
+rounds go each way they can. Playwright serves the build the way GitHub Pages
+does (`scripts/serve-demo.mjs`), under `HATED_BASE_URL` when it's set, in a
+phone-sized Chromium: `npx playwright install chromium` fetches it once, or
+`PLAYWRIGHT_CHANNEL=chrome` uses an installed Chrome.
 
 The root `package.json` pins one React version (`overrides`), because another
 workspace's tooling would otherwise hoist a second copy and break hooks in the

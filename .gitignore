@@ -12,3 +12,7 @@ coverage/
 
 # Uploaded photos (PHOTO_DIR's default), never committed.
 packages/db/data/
+
+# Playwright (packages/mobile/e2e): reports and traces from the last run.
+test-results/
+playwright-report/
